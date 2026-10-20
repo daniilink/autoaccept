@@ -1,0 +1,6 @@
+# Created next to the script while it runs: personal data (lobby IDs, your click points)
+dota_log.txt
+dota_accept.ini
+bak/
+# AutoHotkey's own binary is not part of this project
+*.exe
