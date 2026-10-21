@@ -1,328 +1,130 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 ; ──────────────────────────────────────────────────────────────────────
-;  АВТОПРИНЯТИЕ МАТЧА В DOTA 2.  Самостоятельный скрипт, больше ничего не
-;  делает: ни автозамен, ни других горячих клавиш.
+;  AUTO-ACCEPT FOR DOTA 2 MATCHES AND PARTY INVITES.
 ;
-;  Включать руками не надо: пока запущена дота, он на взводе, дота закрыта
-;  — спит. Сам по времени не отключается.
+;  Runs while Dota is running; sleeps while Dota is closed.
 ;
-;  КАК ОНО РАБОТАЕТ ТЕПЕРЬ (главный путь — лог доты):
-;    Дота с параметром запуска -condebug пишет console.log, и в нём
-;    открытым текстом видно всё нужное. Замерено 19.10.2026:
-;      Recv 7170 (k_EMsgGCReadyUpStatus)   матч найден, окно висит
-;      Send 7070 (k_EMsgGCReadyUp)         принято, наш клик дошёл
-;      owner=<Invite:                      пришло приглашение в пати
-;      k_EMsgGCPartyInviteResponse         ответ на приглашение дошёл
-;      ...SteamDatagramTicket              сервер выдан, матч стартует
-;    Задержка записи на диск: медиана 0.22 с, максимум 0.59 — при окне
-;    принятия в 25 секунд запас стократный.
+;  HOW IT WORKS
+;    Dota 2 started with the -condebug launch option writes a plain-text
+;    console.log. The script reads it and reacts to what the game itself
+;    reports: "match found", "party invite received". A click is confirmed by
+;    the same log (Dota writes that the reply was sent), so a miss costs one
+;    extra click, not a lost match. Without -condebug the script does nothing.
 ;
-;    Поэтому СОБЫТИЕ мы знаем точно, а экран нужен ровно для одного:
-;    найти, КУДА нажать. Ищем не картинку кнопки и не один пиксель, а
-;    ШИРОКУЮ РОВНУЮ ПОЛОСУ зелёной заливки — ей безразличны язык
-;    (текст мы не читаем), разрешение (ширина считается от окна) и
-;    Dota Plus, из-за которого окно принятия шире и стоит иначе.
-;    Промах не страшен: нажатие подтверждается строкой из лога, и если
-;    подтверждения нет за 1.4 с, пробуется следующий кандидат.
+;  CLICKING
+;    First as a message posted to the Dota window, without the mouse (the cursor
+;    does not move). If that is not confirmed, a real mouse click is made and
+;    the cursor goes straight back.
 ;
-;  ЗАПАСНОЙ ПУТЬ — если -condebug не добавлен и лога нет. Тогда правило
-;  на два пикселя, как было:
-;      кнопка ЗАКРЫТИЯ доты (справа вверху) своего обычного цвета
-;      И  в середине экрана появилась серая панель окна принятия
-;          → нажать зелёную кнопку
-;
-;  Почему именно так, замерено 19.10.2026 на живом экране, четыре принятия
-;  подряд. Каждое выглядит в две фазы:
-;      фаза 1, 1-4 с: панель окна принятия 0x3D4341, кнопка закрытия
-;                     обычная красная 0x480D0D  ← ЖМЁМ ЗДЕСЬ
-;      фаза 2, ~4 с:  панель 0x1F2424, кнопка закрытия затемнена 0x0B0606
-;  Фаза 2 — это уже ПОСЛЕ принятия, поэтому ловить затемнение кнопки нельзя,
-;  опоздаем на шаг. Зато кнопка закрытия в фазе 1 ровно обычная, а в бою её
-;  на экране нет вообще — значит она же и отвечает на вопрос «я в меню или в
-;  матче». Поэтому никакой приметы боя и никакой машины состояний больше
-;  нет: в бою первое условие ложно всегда.
-;
-;  До этого правила скрипт искал зелёную заливку кнопки — и 19.10 пять раз
-;  щёлкнул посреди боя, потому что тёмно-зелёный 0x3C6250 это ещё и трава, и
-;  верхняя панель, и фон меню. Зелёный остался только как способ НАЙТИ, куда
-;  именно нажать, когда окно принятия уже опознано по панели.
-;
-;  КАК ПОСТАВИТЬ ДРУГУ
-;    1. Поставить AutoHotkey v2 — autohotkey.com (бесплатно).
-;    2. Положить файл куда угодно, запустить двойным кликом. В трее появится
-;       значок: там состояние и все кнопки. Рядом с файлом он сделает
-;       dota_accept.ini (точки) и dota_log.txt (что когда нажал).
-;    3. Трей → «Запускать вместе с Windows».
-;    4. Точки прошиты мои, под 2560x1440. При другом разрешении снять свои,
-;       это полминуты — трей или горячие клавиши:
-;         Ctrl+Alt+C — навести мышь на кнопку ЗАКРЫТИЯ доты (крестик справа
-;                      вверху) в главном меню и нажать;
-;         Ctrl+Alt+W — когда висит окно принятия, навести на его СЕРУЮ
-;                      ПАНЕЛЬ (не на кнопку, не на буквы) и нажать;
-;         Ctrl+Alt+F — тогда же навести на зелёную заливку кнопки ACCEPT.
-;       Ctrl+Alt+T в любой момент показывает, что он видит сейчас.
-;
-;  ГОРЯЧИЕ КЛАВИШИ
-;    Ctrl+Alt+P   пауза / снова авто      Ctrl+Alt+T   что видно сейчас
-;    Ctrl+Alt+C   точка кнопки закрытия   Ctrl+Alt+W   точка панели окна
-;    Ctrl+Alt+F   точка зелёной кнопки
-;    Ctrl+Alt+K   пати: точка ПАНЕЛИ приглашения
-;    Ctrl+Alt+J   пати: точка его КНОПКИ принять. Снять обе, пока
-;                 приглашение висит на экране, — и пати тоже начнёт
-;                 приниматься само. Пока не сняты, эта часть молчит.
-;    Ctrl+Alt+D   снимок, когда окно принятия висит: что в этот момент на
-;                 обеих точках и где в столбце зелёное. Прицеливаться не
-;                 надо, точки он читает сам.
-;
-;  ЧТО ЕЩЁ ВАЖНО, чтобы не переделывать по второму кругу:
-;  · Нажимается КЛИКОМ, а не Enter: в Dota 2 Enter открывает чат. Проверено
-;    по логу — шесть Enter подряд не убрали кнопку. Клик заодно не требует
-;    фокуса, он уходит в окно под курсором; мышь сразу возвращается.
-;  · Перед каждым чтением пикселя проверяется, что под точкой ДЕЙСТВИТЕЛЬНО
-;    окно доты. WinExist() про это не говорит: дота бывает жива и полностью
-;    закрыта другим окном. 19.10 замер поймал это прямо — на точке был белый
-;    пиксель чужого окна, а скрипт читал его как меню и щёлкал по чужому
-;    приложению.
-;  · После нажатия слежка продолжается: любой в лобби может отказаться,
-;    поиск пойдёт заново и окно всплывёт ещё раз. В замере таких кругов
-;    было четыре подряд.
+;  CONTROLS
+;    Ctrl+Alt+P pauses. Tray icon menu: what to auto-accept (matches, party
+;    invites), phone notifications, startup, log. Settings are kept in
+;    dota_accept.ini, a record of what was clicked in dota_log.txt (both next
+;    to the script).
 ; ──────────────────────────────────────────────────────────────────────
 
 DOTA_EXE := "dota2.exe"
 DOTA_WIN := "ahk_exe dota2.exe"
-DOTA_POLL := 200         ; как часто смотреть, когда дота запущена, мс
-DOTA_IDLE := 2000        ; как часто проверять, не запустилась ли дота
-DOTA_TOL := 14           ; допуск по каждому каналу цвета
-DOTA_NEED := 3           ; панель надо увидеть столько опросов подряд
-DOTA_SPAN := 20          ; полоса поиска зелёной кнопки по горизонтали
-DOTA_VSPAN := 260        ; и по вертикали от точки: кнопку сдвигает панель
-                         ; Dota Plus с оценкой матча, по логу на ±240
-DOTA_SCAN_MAX := 14      ; не больше столько кандидатов за опрос
-DOTA_SCAN_MS := 150      ; и не дольше столька мс
-DOTA_STUCK := 6          ; окно не исчезает после столька кликов → пауза
-DOTA_SAMPLE_WAIT := 2000 ; сколько ждать, пока уберёшь мышь с точки
-; ТИХО: про свою обычную работу он не говорит ничего — ни про принятый матч,
-; ни про взвод. Тултипсы остаются только там, где ты сам нажал кнопку, и на
-; двух редких случаях, когда молчать нельзя: он встал на паузу или не нашёл
-; зелёную кнопку. Всё остальное пишется в лог.
-QUIET := true
-; Строки в console.log доты, по которым всё и работает. Сравниваем с
-; закрывающей скобкой: "k_EMsgGCReadyUpStatus" содержит в себе
-; "k_EMsgGCReadyUp", и без скобки одно ловилось бы другим.
-CLOG_READY := "(k_EMsgGCReadyUpStatus)"   ; GC: идёт ready-check
-CLOG_MINE := "(k_EMsgGCReadyUp)"          ; клиент: приняли (мы или он)
-CLOG_START := "(k_EMsgGCToClientSteamDatagramTicket)"  ; сервер выдан
-; Приглашение в пати. Замерено: оно приходит как подписка на объект
-; Invite, в строке видно и SteamID пригласившего — при желании потом
-; можно принимать только от своих. Ответ клиента (наш клик) дота пишет
-; отдельным сообщением, по нему и проверяем, что попали.
-; Токен берём ТОЧНЫЙ: строка закрытия приглашения — CacheUnsubscribedJob —
-; тоже содержит "owner=<Invite:", и по ней скрипт щёлкал бы в пустоту уже
-; после отказа или истечения приглашения.
-CLOG_INV := "CacheSubscribedJob(owner=<Invite:"   ; пришло приглашение
-CLOG_INVOK := "(k_EMsgGCPartyInviteResponse)"   ; ответ отправлен
-CLOG_PARTY := "owner=<Party:"             ; мы в пати, итог
-; У каждого ready-check своё лобби со своим ID. Это и есть точный ответ
-; на вопрос «тот же матч или уже другой», вместо гадания по времени.
+DOTA_POLL := 200         ; poll interval while Dota is running, ms
+DOTA_IDLE := 2000        ; how often to check whether Dota has started, ms
+; Lines in Dota's console.log that everything is based on. Compared with the
+; closing parenthesis: "k_EMsgGCReadyUpStatus" contains "k_EMsgGCReadyUp",
+; and without the parenthesis one would match the other.
+CLOG_READY := "(k_EMsgGCReadyUpStatus)"   ; GC: a ready-check is in progress
+CLOG_MINE := "(k_EMsgGCReadyUp)"          ; client: accepted (by us or by you)
+CLOG_START := "(k_EMsgGCToClientSteamDatagramTicket)"  ; server assigned
+; A party invite arrives as a subscription to an Invite object. The token must
+; be EXACT: the closing line (CacheUnsubscribedJob) also contains
+; "owner=<Invite:", and the script would click at nothing after a decline. The
+; client's reply is a separate message; we use it to confirm that we hit.
+CLOG_INV := "CacheSubscribedJob(owner=<Invite:"
+CLOG_INVOK := "(k_EMsgGCPartyInviteResponse)"
+; Every ready-check has its own lobby with its own ID: the exact answer to
+; "same match or a new one", instead of guessing by time.
 CLOG_LOBBY := "owner=<Lobby:"
-CLOG_WAIT := 1400       ; сколько ждать подтверждения нажатия, мс
-CLOG_TRIES := 5         ; столько кандидатов пробуем за один ready-check
-BTN_MINW := 60          ; кнопка не уже столька пикселей (на 1440p)
-; Размер снимка. 256x144 при окне 2560x1440 — это ровно 1:10: кнопка в
-; 300 px становится полосой в 30 клеток, мимо такой не промахнёшься, а
-; просмотр 37 тысяч точек стоит ~150 мс.
+CLOG_WAIT := 900        ; how long to wait for a real-click confirmation, ms
+CLOG_TRIES := 5         ; candidates tried per ready-check
+BTN_MINW := 60          ; the button is at least this many px wide (at 1440p)
+; Snapshot size. 256x144 for a 2560x1440 window is exactly 1:10: a 300 px button
+; becomes a 30-cell band, and scanning costs tens of milliseconds.
 SHOT_W := 256
 SHOT_H := 144
-; Полоса шире этой доли окна — это не кнопка, а панель во всю ширину.
-; По логу: кнопка 230 px при окне 2560 (0.09), промахи 850 и 1040 px.
+; A band wider than this fraction of the window is not a button but a
+; full-width panel.
 BTN_MAXFRAC := 0.25
-; 1.1 с, а не 600 мс: подтверждение само доезжает до диска за 0.1-0.6 с
-; (замерено), и при коротком окне УДАЧНОЕ тихое нажатие не успевало бы
-; подтвердиться, и мышь дёрнулась бы впустую — ровно чего он не хочет.
-CLOG_SILENT := 1100      ; сколько ждать подтверждения тихого нажатия
-; Глухой паузы после принятия больше нет: замолкаем по факту
-; подтверждения, а просыпаемся по новому лобби.
-CLOG_HOLD := 0
-; Аварийный таймаут на случай режима, где строки лобби не будет вовсе.
-READY_GAP := 120000
-RETRY_MS := 4000         ; все кандидаты промазали — через столько снова
+; 1.1 s and not less: the confirmation itself reaches the disk in 0.1-0.6 s, and
+; a shorter wait would miss the confirmation of a successful silent click.
+CLOG_SILENT := 1100      ; how long to wait for a silent-click confirmation, ms
+CLOG_HOLD := 0           ; no pause after accepting: we go quiet once confirmed
+NTFY_FAIL_MS := 5000     ; not accepted within this many ms: send a phone alert
+READY_GAP := 120000      ; fallback timeout: "this is a new ready-check"
+RETRY_MS := 4000         ; all candidates missed: retry after this many ms
 DOTA_LOGF := A_ScriptDir . "\dota_log.txt"
 DOTA_INI := A_ScriptDir . "\dota_accept.ini"
 DOTA_LNK := A_AppData . "\Microsoft\Windows\Start Menu\Programs\Startup"
            . "\DotaAccept.lnk"
 
-; Точки по умолчанию — замеренные, под 2560x1440 на весь экран.
-DEF := Map("close_x", 2500, "close_y", 58, "close_c", 0x480D0D,
-           "panel_x", 1199, "panel_y", 684, "panel_c", 0x3D4341,
-           "btn_x", 1199, "btn_y", 684, "btn_c", 0x3C6250,
-           "btn_h", 0x9DE38E)
-
-; Координаты и цвета — ЭКРАННЫЕ. По умолчанию AHK считает их от активного
-; окна, и точка, снятая в одном окне, в другом уже не та.
+; Coordinates and colors are SCREEN-relative; otherwise AHK uses the active window.
 CoordMode "Mouse", "Screen"
 CoordMode "Pixel", "Screen"
 
-closeX := 0, closeY := 0, closeC := 0      ; кнопка закрытия доты
-panelX := 0, panelY := 0, panelC := 0      ; серая панель окна принятия
-btnX := 0, btnY := 0, btnC := 0, btnH := 0 ; зелёная кнопка и её подсветка
 dotaPause := false       ; Ctrl+Alt+P
-dotaLive := -1           ; 1 дота есть, 0 нет, -1 ещё не смотрели
-hits := 0                ; сколько опросов подряд видим панель
-nextAt := 0              ; раньше этого момента не жмём
-seenAt := 0              ; когда панель увидели впервые — для замера
-clicks := 0              ; кликов подряд, после которых окно не исчезло
-dumped := false          ; дамп столбца на это окно уже написан
-autoClose := true        ; точку не снимали руками — считаем от окна
-autoPanel := true
-autoBtn := true
-lastW := 0, lastH := 0   ; при каком размере окна считали в прошлый раз
-; ПРИГЛАШЕНИЕ В ПАТИ. Своё правило и свои точки: всплывашка приходит и в
-; меню, и посреди матча, фон за собой не затемняет и кнопку закрытия не
-; трогает. Пока точки не сняты (для них нужно живое приглашение), всё
-; это выключено: ноль в invPX значит «не умею, ничего не делаю».
-invPX := 0, invPY := 0, invPC := 0     ; панель всплывашки
-invBX := 0, invBY := 0, invBC := 0     ; её кнопка «принять»
-invBH := 0                             ; и подсвеченный цвет кнопки
-invHits := 0, invNext := 0, invClicks := 0
-clogPath := ""          ; путь к console.log доты
-clogPos := 0             ; сколько байт уже прочли
-clogOk := false          ; лог найден и читается
-clogSaid := false        ; про отсутствие лога сказали один раз
-readyAt := 0             ; когда последний раз видели ready-check
-readyDone := false       ; в этом ready-check уже приняли
-readyTries := 0          ; сколько кандидатов попробовали
-invAt := 0               ; когда видели приглашение в пати
-invDone := false         ; на это приглашение уже ответили
-invTried := 0            ; сколько кандидатов попробовали
-holdTill := 0            ; (не используется: паузы после принятия нет)
-curLobby := ""           ; ID лобби текущего ready-check
-lastTry := 0             ; когда последний раз перебирали кандидатов
-learned := []            ; запомненные удачные места, в долях окна
-pend := 0                ; подсвеченный цвет, снятый в момент Ctrl+Alt+F
+dotaLive := -1           ; 1 Dota running, 0 not running, -1 not checked yet
+clogPath := ""           ; path to Dota's console.log
+clogPos := 0             ; bytes already read
+clogOk := false          ; log found and readable
+clogSaid := false        ; the missing-log message was already logged
+readyAt := 0             ; last time a ready-check was seen
+readyDone := false       ; this ready-check is already accepted
+readyTries := 0          ; candidates tried so far
+invAt := 0               ; last time a party invite was seen
+invDone := false         ; this invite is already answered
+invTried := 0            ; candidates tried so far
+holdTill := 0            ; (post-accept pause is not used)
+curLobby := ""           ; lobby ID of the current ready-check
+lastTry := 0             ; last time candidates were tried
+learned := []            ; remembered successful spots, as window fractions
 
-M_PAUSE := "Пауза  (Ctrl+Alt+P)"
-M_PROBE := "Что видно сейчас  (Ctrl+Alt+T)"
-M_CLOSE := "Точка кнопки закрытия  (Ctrl+Alt+C)"
-M_PANEL := "Точка панели окна принятия  (Ctrl+Alt+W)"
-M_BTN := "Точка зелёной кнопки  (Ctrl+Alt+F)"
-M_RUN := "Запускать вместе с Windows"
-M_LOG := "Открыть лог"
+; What to auto-accept. Stored in the ini file, switched in the tray menu.
+optMatch := IniRead(DOTA_INI, "options", "match", "1") != "0"
+optInvite := IniRead(DOTA_INI, "options", "invite", "1") != "0"
 
-; ЦВЕТА от разрешения не зависят — интерфейс доты красят одинаково, их и
-; берём готовыми. А КООРДИНАТЫ зависят, поэтому если точку не снимали
-; руками, считаем её от размеров окна доты (AutoPoints). Так у друга с
-; другим монитором всё работает сразу, без настройки.
-Load() {
-    global closeX, closeY, closeC, panelX, panelY, panelC
-    global btnX, btnY, btnC, btnH, DOTA_INI, DEF
-    global autoClose, autoPanel, autoBtn
-    closeC := Integer(IniRead(DOTA_INI, "close", "color", DEF["close_c"]))
-    panelC := Integer(IniRead(DOTA_INI, "panel", "color", DEF["panel_c"]))
-    btnC := Integer(IniRead(DOTA_INI, "accept", "color", DEF["btn_c"]))
-    btnH := Integer(IniRead(DOTA_INI, "accept", "hover", DEF["btn_h"]))
-    global invPX, invPY, invPC, invBX, invBY, invBC, invBH
-    invPX := Integer(IniRead(DOTA_INI, "invite", "px", 0))
-    invPY := Integer(IniRead(DOTA_INI, "invite", "py", 0))
-    invPC := Integer(IniRead(DOTA_INI, "invite", "pcolor", 0))
-    invBX := Integer(IniRead(DOTA_INI, "invite", "bx", 0))
-    invBY := Integer(IniRead(DOTA_INI, "invite", "by", 0))
-    invBC := Integer(IniRead(DOTA_INI, "invite", "bcolor", 0))
-    invBH := Integer(IniRead(DOTA_INI, "invite", "bhover", 0))
-    autoClose := (IniRead(DOTA_INI, "close", "x", "") = "")
-    autoPanel := (IniRead(DOTA_INI, "panel", "x", "") = "")
-    autoBtn := (IniRead(DOTA_INI, "accept", "x", "") = "")
-    if !autoClose {
-        closeX := Integer(IniRead(DOTA_INI, "close", "x", 0))
-        closeY := Integer(IniRead(DOTA_INI, "close", "y", 0))
-    }
-    if !autoPanel {
-        panelX := Integer(IniRead(DOTA_INI, "panel", "x", 0))
-        panelY := Integer(IniRead(DOTA_INI, "panel", "y", 0))
-    }
-    if !autoBtn {
-        btnX := Integer(IniRead(DOTA_INI, "accept", "x", 0))
-        btnY := Integer(IniRead(DOTA_INI, "accept", "y", 0))
-    }
-}
+; Phone notifications via ntfy (https://ntfy.sh). The topic is effectively the
+; channel's "password" on the public server: it is generated randomly on first
+; run and stored only in dota_accept.ini; it is never logged or shown.
+optNtfy := IniRead(DOTA_INI, "options", "ntfy", "1") != "0"
+ntfyServer := RTrim(IniRead(DOTA_INI, "ntfy", "server", "https://ntfy.sh"), "/")
+ntfyTopic := IniRead(DOTA_INI, "ntfy", "topic", "")
+ntfyJobs := []           ; requests in flight, to check their status later
+readyFail := false       ; the "could not accept" alert was already sent for this ready-check
+alertedFor := "-"        ; lobby the alert is already armed for
+issues := Map()          ; current problems: key -> text (the tray icon turns into "pause")
+dotaSince := 0           ; when Dota was first seen running
+lastGrow := 0            ; last time console.log grew
+invPending := false      ; invite received, popup not found / not accepted yet
+invUntil := 0            ; keep trying until this moment
+invRetryAt := 0          ; next retry time
+invMissLogged := false   ; the "button not found" message was already logged
 
-; Пересчёт точек под текущее окно доты. Опорные числа — замеренные на
-; 2560x1440 во весь экран: кнопка закрытия в 60 пикселях от правого края и
-; 58 от верхнего; панель окна принятия в 81 левее и 36 выше центра экрана.
-; Интерфейс доты масштабируется по высоте, поэтому множитель — высота/1440.
-AutoPoints() {
-    global closeX, closeY, panelX, panelY, btnX, btnY, DOTA_WIN
-    global autoClose, autoPanel, autoBtn, lastW, lastH
-    try
-        WinGetPos &wx, &wy, &ww, &wh, DOTA_WIN
-    catch
-        return false
-    if !ww || !wh
-        return false
-    if ww = lastW && wh = lastH
-        return true
-    lastW := ww, lastH := wh
-    k := wh / 1440.0
-    if autoClose
-        closeX := wx + ww - Round(60 * k), closeY := wy + Round(58 * k)
-    if autoPanel
-        panelX := wx + Round(ww / 2) - Round(81 * k)
-        , panelY := wy + Round(wh / 2) - Round(36 * k)
-    if autoBtn
-        btnX := panelX, btnY := panelY
-    Log(Format("окно доты {1}x{2}: кнопка закрытия {3},{4}, панель {5},{6}"
-               . "{7}", ww, wh, closeX, closeY, panelX, panelY,
-               (autoClose || autoPanel) ? " (посчитаны от окна)" : ""))
-    return true
-}
-Load()
+M_NTFY := "Phone notifications (ntfy)"
+M_NTFYCOPY := "Copy ntfy topic"
+M_NTFYTEST := "Send test notification"
+M_MATCH := "Auto-accept matches"
+M_INV := "Auto-accept party invites"
+M_PAUSE := "Pause  (Ctrl+Alt+P)"
+M_RUN := "Start with Windows"
+M_LOG := "Open log"
+
 LearnLoad()
-
-; Запомненные удачные нажатия: доли окна, а не пиксели, — тогда они
-; переносятся между разрешениями и между аккаунтами (у Dota Plus окно
-; принятия другое). Храним до трёх, свежее первым.
-LearnLoad() {
-    global learned, DOTA_INI
-    learned := []
-    Loop 3 {
-        _v := IniRead(DOTA_INI, "learn", "p" . A_Index, "")
-        if _v = ""
-            continue
-        _p := StrSplit(_v, ",")
-        if _p.Length >= 3
-            learned.Push([_p[1] + 0, _p[2] + 0, _p[3] + 0])
-    }
-}
-
-LearnSave(rx, ry, rw) {
-    global learned, DOTA_INI
-    _new := [[rx, ry, rw]]
-    for e in learned {
-        ; то же место второй раз не храним
-        if Abs(e[1] - rx) < 0.03 && Abs(e[2] - ry) < 0.03
-            continue
-        if _new.Length < 3
-            _new.Push(e)
-    }
-    learned := _new
-    Loop 3 {
-        if A_Index <= learned.Length
-            IniWrite Format("{1:0.4f},{2:0.4f},{3:0.4f}", learned[A_Index][1],
-                            learned[A_Index][2], learned[A_Index][3]),
-                     DOTA_INI, "learn", "p" . A_Index
-    }
-}
 
 Log(txt) {
     global DOTA_LOGF
-    try FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") . "  " . txt
+    try FileAppend(FormatTime(, "yyyy-MM-dd HH:mm:ss") . "." . A_MSec . "  " . txt
                    . "`n", DOTA_LOGF, "UTF-8")
 }
 
-Note(txt, ms := 1500, force := false) {
-    global QUIET
-    if QUIET && !force
-        return
+Note(txt, ms := 2500, force := false) {
     ToolTip txt
     SetTimer () => ToolTip(), -ms
 }
@@ -334,18 +136,7 @@ Px(x, y) {
         return -1
 }
 
-; Сравнение с допуском: дота сглаживает края и подсвечивает окно, точного
-; совпадения пикселя ждать нельзя.
-Same(c, w) {
-    global DOTA_TOL
-    if c = -1
-        return false
-    return Abs((c & 0xFF) - (w & 0xFF)) <= DOTA_TOL
-        && Abs(((c >> 8) & 0xFF) - ((w >> 8) & 0xFF)) <= DOTA_TOL
-        && Abs(((c >> 16) & 0xFF) - ((w >> 16) & 0xFF)) <= DOTA_TOL
-}
-
-; Окно ПОД ТОЧКОЙ должно быть дотой, иначе читать нечего.
+; The window UNDER THE POINT must be Dota, otherwise there is nothing to read.
 Under(x, y) {
     global DOTA_EXE
     hw := DllCall("WindowFromPoint", "int64",
@@ -363,59 +154,10 @@ Under(x, y) {
         return false
 }
 
-InMenu() {
-    global closeX, closeY, closeC
-    return closeX ? Same(Px(closeX, closeY), closeC) : false
-}
-
-DialogUp() {
-    global panelX, panelY, panelC
-    return panelX ? Same(Px(panelX, panelY), panelC) : false
-}
-
-; Где нажать. Окно уже опознано по панели, поэтому зелёный тут работает не
-; приметой, а линейкой: ищем его в полосе вокруг точки кнопки — по высоте
-; кнопку сдвигает панель Dota Plus. Ищем ТОЛЬКО внутри окна доты.
-FindButton() {
-    global btnX, btnY, btnC, btnH, DOTA_TOL, DOTA_SPAN, DOTA_VSPAN
-    global DOTA_SCAN_MAX, DOTA_SCAN_MS, DOTA_WIN
-    if Same(Px(btnX, btnY), btnC) || (btnH && Same(Px(btnX, btnY), btnH))
-        return [btnX, btnY]
-    x1 := btnX - DOTA_SPAN, x2 := btnX + DOTA_SPAN
-    y1 := btnY - DOTA_VSPAN, y2 := btnY + DOTA_VSPAN
-    try {
-        WinGetPos &wx, &wy, &ww, &wh, DOTA_WIN
-        if ww > 0 && wh > 0 {
-            x1 := Max(x1, wx), x2 := Min(x2, wx + ww - 1)
-            y1 := Max(y1, wy), y2 := Min(y2, wy + wh - 1)
-        }
-    }
-    if x1 > x2 || y1 > y2
-        return 0
-    t0 := A_TickCount
-    for w in (btnH ? [btnC, btnH] : [btnC]) {
-        y := y1
-        Loop DOTA_SCAN_MAX {
-            try {
-                if !PixelSearch(&fx, &fy, x1, y, x2, y2, w, DOTA_TOL)
-                    break
-            } catch
-                break
-            if Under(fx, fy)
-                return [fx, fy]
-            if A_TickCount - t0 > DOTA_SCAN_MS
-                return 0
-            y := fy + 1
-        }
-    }
-    return 0
-}
-
-; СНИМОК области экрана, сразу сжатый до sw x sh. Возвращает буфер
-; sw*sh*4 байт, по четыре на точку: B, G, R и мусор.
-; StretchBlt с HALFTONE усредняет при сжатии, а не берёт каждый n-й пиксель,
-; — поэтому тонкая рамка не превращается в полосу, а большая заливка
-; остаётся заливкой.
+; SNAPSHOT of a screen area, immediately scaled down to sw x sh. Returns a
+; buffer of sw*sh*4 bytes, four per pixel: B, G, R and padding. StretchBlt with
+; HALFTONE averages while shrinking instead of taking every n-th pixel, so a
+; thin border does not turn into a band and a large fill stays a fill.
 Shot(x, y, w, h, sw, sh) {
     hdcS := DllCall("GetDC", "ptr", 0, "ptr")
     if !hdcS
@@ -433,7 +175,7 @@ Shot(x, y, w, h, sw, sh) {
         bi := Buffer(40, 0)
         NumPut("uint", 40, bi, 0)
         NumPut("int", sw, bi, 4)
-        NumPut("int", -sh, bi, 8)      ; минус — строки сверху вниз
+        NumPut("int", -sh, bi, 8)      ; negative height: rows run top to bottom
         NumPut("ushort", 1, bi, 12)
         NumPut("ushort", 32, bi, 14)
         px := Buffer(sw * sh * 4, 0)
@@ -448,33 +190,11 @@ Shot(x, y, w, h, sw, sh) {
     return px
 }
 
-; Зелень КНОПКИ, а не панели. Зелёный канал должен доминировать с
-; запасом: у заливки кнопки (87,145,97) запас есть, у панели окна
-; (48,78,66) синий почти равен зелёному — и она отсеивается.
-GreenDom(c) {
-    if c = -1
-        return false
-    r := (c >> 16) & 0xFF, g := (c >> 8) & 0xFF, b := c & 0xFF
-    return g > r + 20 && g > b + 15 && g > 60 && g < 250
-}
-
-; Тот же тон: сравниваем кандидата с цветом, от которого шли по полосе.
-; Допуск шире обычного — кнопка пульсирует и к краям темнеет.
-SameHue(c, w) {
-    if !GreenDom(c)
-        return false
-    return Abs(((c >> 8) & 0xFF) - ((w >> 8) & 0xFF)) <= 45
-        && Abs(((c >> 16) & 0xFF) - ((w >> 16) & 0xFF)) <= 45
-        && Abs((c & 0xFF) - (w & 0xFF)) <= 45
-}
-
-; Кандидаты на кнопку ПРИНЯТЬ. Запускается один раз на ready-check, когда
-; уже точно известно, что окно висит, — поэтому можно искать нормально, а не
-; одним пикселем. Проверка геометрией: кнопка это ШИРОКАЯ РОВНАЯ ПОЛОСА
-; своего цвета. У травы и панелей такой полосы нет, а у кнопки она есть
-; всегда, в любом языке и при любом разрешении.
-; wide=false — для маленькой кнопки приглашения: она уже и всплывашка
-; стоит не по центру, поэтому и полоса короче, и область больше.
+; Candidates for the ACCEPT button. Runs once per ready-check, when we already
+; know the window is up, so we can search properly instead of probing one pixel.
+; Geometry check: the button is a WIDE FLAT BAND of one colour. Grass and panels
+; have no such band; the button always does, in any language and at any
+; resolution.
 FindAccept(wide := true) {
     global DOTA_WIN, BTN_MINW, CLOG_TRIES, SHOT_W, SHOT_H
     global BTN_MAXFRAC, learned
@@ -485,14 +205,14 @@ FindAccept(wide := true) {
         return out
     if !ww || !wh
         return out
-    ; Снимок ВСЕГО окна: кнопка принятия стоит по центру, а всплывашка
-    ; приглашения может быть у любого края, и область для них одна.
+    ;    Snapshot of the WHOLE window: the accept button is in the middle, and the
+    ;    popups can be at any edge, so one area serves both.
     px := Shot(wx, wy, ww, wh, SHOT_W, SHOT_H)
     if !px
         return out
     kx := ww / SHOT_W, ky := wh / SHOT_H
-    ; Минимальная ширина полосы — в клетках снимка. BTN_MINW задан для
-    ; 1440p, поэтому сначала переводим в пиксели этого окна, потом в клетки.
+    ;    Minimum band width in snapshot cells. BTN_MINW is defined for 1440p, so
+    ;    convert it to pixels of this window first, then to cells.
     minw := Round((wide ? BTN_MINW : BTN_MINW / 3) * (wh / 1440.0) / kx)
     if minw < 3
         minw := 3
@@ -522,9 +242,8 @@ FindAccept(wide := true) {
     }
     if !rows.Length
         return out
-    ; Самая широкая полоса — скорее всего кнопка. Сортируем по ширине и
-    ; схлопываем соседние строки одной и той же кнопки в одного кандидата.
-    ; Внутри корзины «нормальной ширины» первой пойдёт самая широкая.
+    ;    Sort bands by width and merge adjacent rows of the same button into one
+    ;    candidate. Within the "normal width" bucket the widest goes first.
     Loop rows.Length - 1 {
         i := A_Index
         Loop rows.Length - i {
@@ -534,10 +253,10 @@ FindAccept(wide := true) {
             }
         }
     }
-    ; Сначала собираем всех, потом раскладываем по трём корзинам:
-    ; 1) рядом с запомненным удачным местом — сразу,
-    ; 2) нормальной ширины — по убыванию ширины,
-    ; 3) шире четверти окна — в конец, это панели, а не кнопки.
+    ;    First collect everyone, then sort into three buckets:
+    ;    1) near a remembered successful spot - first,
+    ;    2) normal width - by descending width,
+    ;    3) wider than a quarter of the window - last; those are panels, not buttons.
     _a := [], _b := [], _c := []
     for e in rows {
         cx := wx + Round((e[1] + e[2]) / 2 * kx)
@@ -563,8 +282,13 @@ FindAccept(wide := true) {
         _e := [cx, cy, _w, e[4]]
         _hit := false
         for L in learned {
+            ;            ; Match the width too: a 1040 px background panel may now lie where
+            ;            ; the old button was. By coordinates it is "ours", by width (a button
+            ;            ; is ~0.09 of the window) it is not. Without this check the wrong
+            ;            ; candidate went first and ~2.5 s were wasted.
             if Abs((cx - wx) / ww - L[1]) < 0.06
                && Abs((cy - wy) / wh - L[2]) < 0.06
+               && Abs(_w / ww - L[3]) < 0.03
                 _hit := true
         }
         if _hit
@@ -584,33 +308,34 @@ FindAccept(wide := true) {
     return out
 }
 
-; Если окно принятия опознано, а зелёного нет — пишем в лог весь столбец.
-; По этим строкам видно, где кнопка на самом деле, и точку можно поправить
-; не гадая. Один раз на окно, иначе лог захлебнётся.
-DumpColumn(why := "окно принятия вижу, зелёной кнопки не нашёл") {
+; If the accept window is recognised but there is no green, write the whole grid
+; to the log. These rows show where the button really is. Once per window,
+; otherwise the log would be flooded.
+DumpColumn(why := "accept window seen, green button not found") {
     global DOTA_WIN
-    ; Сетка по середине окна, а не один столбец: по одному столбцу в
-    ; прошлый раз пришлось угадывать, где кнопка, а где панель.
+    ;    A grid across the middle of the window rather than one column, so the button
+    ;    can be told apart from the panels.
     try
         WinGetPos &wx, &wy, &ww, &wh, DOTA_WIN
     catch
         return
     s := ""
     Loop 5 {
-        px := wx + Round(ww * (0.35 + 0.075 * (A_Index - 1)))
-        s .= "`n  x=" . px . ":"
+        gx := wx + Round(ww * (0.35 + 0.075 * (A_Index - 1)))
+        s .= "`n  x=" . gx . ":"
         y := wy + Round(wh * 0.2)
         while y <= wy + Round(wh * 0.8) {
-            s .= Format(" {1}:{2:#06x}", y, Px(px, y))
+            s .= Format(" {1}:{2:#06x}", y, Px(gx, y))
             y += Round(wh * 0.025)
         }
     }
-    Log(why . ". сетка:" . s)
+    Log(why . ". grid:" . s)
 }
 
-; ── console.log доты ─────────────────────────────────────────────────
-; Путь берём от самого процесса, а не угадываем: у стима может быть вторая
-; библиотека на другом диске. exe лежит в game\bin\win64, лог — в game\dota.
+; ── Dota's console.log ─────────────────────────────────────────────
+; The path is taken from the process itself, not guessed: Steam may have a
+; second library on another drive. The exe is in game\bin\win64, the log in
+; game\dota.
 ClogFind() {
     global DOTA_EXE, DOTA_INI
     _p := IniRead(DOTA_INI, "log", "path", "")
@@ -637,7 +362,7 @@ ClogFind() {
     return FileExist(_log) ? _log : ""
 }
 
-; ID лобби из куска лога — берём ПОСЛЕДНЕЕ вхождение, оно самое свежее.
+; Lobby ID from a chunk of log: take the LAST occurrence, it is the freshest.
 LobbyId(txt) {
     global CLOG_LOBBY
     p := InStr(txt, CLOG_LOBBY)
@@ -654,21 +379,22 @@ LobbyId(txt) {
     return e ? SubStr(_s, 1, e - 1) : ""
 }
 
-; Новые байты лога. Читаем только хвост: файл за сессию вырастает на
-; десятки килобайт, перечитывать его целиком пять раз в секунду незачем.
+; New bytes of the log. Only the tail is read: the file grows by tens of
+; kilobytes per session, there is no point in re-reading all of it five times
+; a second.
 ClogNew() {
     global clogPath, clogPos
     try {
-        ; Просто "r". Суффикс "-rwd" в AHK ЗАПРЕЩАЕТ другим процессам
-        ; читать-писать-удалять файл, а дота держит его открытым на
-        ; запись — открыть не удавалось, и лог читался как пустой.
+        ;        ; Plain "r". The "-rwd" suffix FORBIDS other processes to read, write
+        ;        ; and delete the file in AHK, and Dota keeps it open for writing, so
+        ;        ; opening failed and the log was read as empty.
         f := FileOpen(clogPath, "r")
         if !f
             return ""
-        ; Дота СТИРАЕТ console.log при каждом своём запуске. Значит файл
-        ; короче запомненной позиции — это новая сессия, и встаём в его
-        ; КОНЕЦ, а не в начало: с начала мы перечитали бы весь лог этой
-        ; сессии разом и приняли бы старый ready-check за новый.
+        ;        ; Dota ERASES console.log on every launch. A file shorter than the
+        ;        ; remembered position is therefore a new session, and we stand at its
+        ;        ; END, not at the start: from the start we would re-read the whole
+        ;        ; session at once and take an old ready-check for a new one.
         if f.Length < clogPos {
             clogPos := f.Length
             f.Close()
@@ -687,80 +413,507 @@ ClogNew() {
         return ""
 }
 
-; ── трей ─────────────────────────────────────────────────────────────
+; Remembered successful clicks: window fractions, not pixels, so they carry
+; over between resolutions and accounts (the accept window differs with Dota
+; Plus). Up to three are kept, newest first.
+LearnLoad() {
+    global learned, DOTA_INI
+    learned := []
+    Loop 3 {
+        _v := IniRead(DOTA_INI, "learn", "p" . A_Index, "")
+        if _v = ""
+            continue
+        _p := StrSplit(_v, ",")
+        if _p.Length >= 3
+            learned.Push([_p[1] + 0, _p[2] + 0, _p[3] + 0])
+    }
+}
+
+LearnSave(rx, ry, rw) {
+    global learned, DOTA_INI
+    _new := [[rx, ry, rw]]
+    for e in learned {
+        ;        ; do not store the same spot twice
+        if Abs(e[1] - rx) < 0.03 && Abs(e[2] - ry) < 0.03
+            continue
+        if _new.Length < 3
+            _new.Push(e)
+    }
+    learned := _new
+    Loop 3 {
+        if A_Index <= learned.Length
+            IniWrite Format("{1:0.4f},{2:0.4f},{3:0.4f}", learned[A_Index][1],
+                            learned[A_Index][2], learned[A_Index][3]),
+                     DOTA_INI, "learn", "p" . A_Index
+    }
+}
+
+; ── health: tray icon and launch-option check ─────────────────────
+; The script uses AutoHotkey's own built-in icons: "H" means all is well, "II"
+; (pause) means paused or something is wrong. No extra icon files are needed.
+AddIssue(key, text) {
+    global issues
+    issues[key] := text
+    Status()
+}
+
+DelIssue(key) {
+    global issues
+    if issues.Has(key) {
+        issues.Delete(key)
+        Status()
+    }
+}
+
+IssueText() {
+    global issues
+    for k, v in issues
+        return v
+    return ""
+}
+
+UpdateIcon() {
+    global dotaPause, issues
+    static last := 0
+    want := (dotaPause || issues.Count) ? 4 : 1
+    if want = last
+        return
+    last := want
+    try TraySetIcon(A_AhkPath, want, true)
+}
+
+; A quiet Windows notification at the bottom of the screen, at most three times
+; in total, so as not to nag someone who does not intend to add the option. The
+; counter is reset once the option is found.
+Hint(text) {
+    global DOTA_INI
+    n := Integer(IniRead(DOTA_INI, "state", "hints", "0"))
+    if n >= 3
+        return
+    IniWrite n + 1, DOTA_INI, "state", "hints"
+    try TrayTip(text, "Dota auto-accept", "Iconi Mute")
+}
+
+HintReset() {
+    global DOTA_INI
+    if IniRead(DOTA_INI, "state", "hints", "0") != "0"
+        IniWrite 0, DOTA_INI, "state", "hints"
+}
+
+HINT_TEXT := "Dota 2 was started without the -condebug launch option, so the script cannot see matches. "
+           . "In Steam: Dota 2 → Properties → Launch Options: add -condebug "
+           . "and restart Dota."
+
+; When Dota is ALREADY running: the process command line is the only reliable
+; answer to whether it was started with -condebug.
+DotaCmdLine() {
+    try {
+        for pr in ComObjGet("winmgmts:").ExecQuery(
+            "SELECT CommandLine FROM Win32_Process WHERE Name='dota2.exe'")
+            return pr.CommandLine
+    }
+    return ""
+}
+
+CheckLaunchOpts() {
+    global HINT_TEXT
+    cmd := DotaCmdLine()
+    if cmd = ""
+        return                          ; could not read it, so do not guess
+    if InStr(cmd, "-condebug") {
+        DelIssue("opts")
+        HintReset()
+        return
+    }
+    AddIssue("opts", "Dota started without -condebug")
+    Log("Dota was started without -condebug: the script cannot see matches")
+    Hint(HINT_TEXT)
+}
+
+; When Dota is not running yet: what is entered in the launch options in Steam
+; (userdata\<id>\config\localconfig.vdf, block of app 570). Returns the options
+; string ("" if none) or -1 if it could not be determined.
+SteamLaunchOptions() {
+    try
+        steam := StrReplace(RegRead("HKCU\Software\Valve\Steam", "SteamPath"), "/", "\")
+    catch
+        return -1
+    user := 0
+    try user := RegRead("HKCU\Software\Valve\Steam\ActiveProcess", "ActiveUser")
+    file := user ? steam . "\userdata\" . user . "\config\localconfig.vdf" : ""
+    if !FileExist(file) {
+        file := "", newest := 0
+        Loop Files steam . "\userdata\*", "D" {
+            f := A_LoopFilePath . "\config\localconfig.vdf"
+            if FileExist(f) && FileGetTime(f) > newest
+                newest := FileGetTime(f), file := f
+        }
+    }
+    if file = ""
+        return -1
+    try
+        txt := FileRead(file, "UTF-8")
+    catch
+        return -1
+    pos := 1
+    while pos := RegExMatch(txt, '"570"\s*\{', &m, pos) {
+        start := pos + m.Len, depth := 1, i := start
+        while depth > 0 && i <= StrLen(txt) {
+            ch := SubStr(txt, i, 1)
+            if ch = "{"
+                depth++
+            else if ch = "}"
+                depth--
+            i++
+        }
+        if RegExMatch(SubStr(txt, start, i - start), '"LaunchOptions"\s+"([^"]*)"', &o)
+            return o[1]
+        pos := start
+    }
+    return ""
+}
+
+; Once at script start, while Dota is not running: if Steam has no such option,
+; say so right away rather than after the first missed match.
+EarlyCheck() {
+    global HINT_TEXT, DOTA_EXE
+    if ProcessExist(DOTA_EXE)
+        return                          ; already running: Tick checks the process
+    o := SteamLaunchOptions()
+    if o = -1
+        return
+    if InStr(o, "-condebug") {
+        HintReset()
+        return
+    }
+    Log("the Dota 2 launch options in Steam do not contain -condebug")
+    Hint(HINT_TEXT)
+}
+
+; ── ntfy notifications ─────────────────────────────────────────────
+; The topic is generated once: 10 random bytes from the system generator.
+NtfyInit() {
+    global ntfyTopic, DOTA_INI
+    if ntfyTopic != ""
+        return
+    buf := Buffer(10)
+    if DllCall("bcrypt\BCryptGenRandom", "ptr", 0, "ptr", buf, "uint", 10,
+               "uint", 2) != 0       ; 2 = system RNG; on failure we go without ntfy
+        return
+    t := "dota-"
+    Loop 10
+        t .= Format("{:02x}", NumGet(buf, A_Index - 1, "UChar"))
+    ntfyTopic := t
+    IniWrite ntfyTopic, DOTA_INI, "ntfy", "topic"
+    Log("ntfy: topic created (stored in dota_accept.ini, section [ntfy])")
+}
+
+; Sending does not block the tick: the request is asynchronous, we check the
+; result a few seconds later and log only failures. The title is "Dota", not the
+; topic: otherwise ntfy would insert the topic and the "password" would end up on
+; the lock screen.
+Ntfy(text, prio := "default", tags := "") {
+    global optNtfy, ntfyServer, ntfyTopic, ntfyJobs
+    if !optNtfy || ntfyTopic = ""
+        return
+    try {
+        w := ComObject("WinHttp.WinHttpRequest.5.1")
+        w.SetTimeouts(3000, 3000, 5000, 5000)
+        w.Open("POST", ntfyServer . "/" . ntfyTopic, true)
+        w.SetRequestHeader("Title", "Dota")
+        w.SetRequestHeader("Priority", prio)
+        if tags != ""
+            w.SetRequestHeader("Tags", tags)
+        w.Send(text)
+        ntfyJobs.Push([w, text])
+        SetTimer NtfyReap, -4000
+    } catch as e {
+        Log("ntfy: send failed — " . e.Message)
+    }
+}
+
+NtfyReap() {
+    global ntfyJobs
+    jobs := ntfyJobs
+    ntfyJobs := []
+    for j in jobs {
+        try {
+            if !j[1].WaitForResponse(0)
+                Log("ntfy: no server response for [" . j[2] . "]")
+            else if j[1].Status != 200
+                Log("ntfy: server answered " . j[1].Status . " for [" . j[2] . "]")
+        } catch as e {
+            Log("ntfy: send error for [" . j[2] . "] — " . e.Message)
+        }
+    }
+}
+
+; Exactly two notifications per match, to avoid burning the daily ntfy quota:
+; "found and accepted" (after our click) and "did not work - accept it yourself"
+; (if nothing was accepted within NTFY_FAIL_MS). "Found" alone is not sent.
+NtfyMatchFail() {
+    global readyDone, readyFail, NTFY_FAIL_MS
+    if readyDone
+        return                          ; already accepted by now
+    readyFail := true
+    Log("ntfy: not accepted within " . Round(NTFY_FAIL_MS / 1000) . " s - alert")
+    Ntfy("Match found, auto-accept did not work — accept it yourself!", "high",
+         "rotating_light")
+}
+
+NtfyCopy() {
+    global ntfyTopic
+    if ntfyTopic = ""
+        return Note("No topic yet", 2000, true)
+    A_Clipboard := ntfyTopic
+    Note("ntfy topic copied to the clipboard.`nIn the ntfy app: tap + and paste.", 5000, true)
+}
+
+NtfyTest() {
+    global optNtfy
+    if !optNtfy
+        return Note("Notifications are off", 2000, true)
+    Ntfy("Connection check: notifications from your PC work", "high", "white_check_mark")
+    Note("Test notification sent", 2000, true)
+}
+
+; ── tray ───────────────────────────────────────────────────────────
 BuildTray() {
-    global M_PAUSE, M_PROBE, M_CLOSE, M_PANEL, M_BTN, M_RUN, M_LOG
+    global M_MATCH, M_INV, M_PAUSE, M_RUN, M_LOG
+    global M_NTFY, M_NTFYCOPY, M_NTFYTEST
     t := A_TrayMenu
     t.Delete()
+    t.Add(M_MATCH, (*) => ToggleOpt("match"))
+    t.Add(M_INV, (*) => ToggleOpt("invite"))
+    t.Add(M_NTFY, (*) => ToggleOpt("ntfy"))
+    t.Add(M_NTFYCOPY, (*) => NtfyCopy())
+    t.Add(M_NTFYTEST, (*) => NtfyTest())
+    t.Add()
     t.Add(M_PAUSE, (*) => TogglePause())
-    t.Add(M_PROBE, (*) => Probe())
-    t.Add()
-    t.Add(M_CLOSE, (*) => GrabStart("close"))
-    t.Add(M_PANEL, (*) => GrabStart("panel"))
-    t.Add(M_BTN, (*) => GrabStart("accept"))
-    t.Add("Пати: точка панели приглашения  (Ctrl+Alt+K)",
-          (*) => GrabStart("invp"))
-    t.Add("Пати: точка кнопки принять  (Ctrl+Alt+J)",
-          (*) => GrabStart("invb"))
-    t.Add("СНИМОК при живом окне принятия  (Ctrl+Alt+D)", (*) => Send("^!d"))
-    t.Add()
     t.Add(M_RUN, (*) => StartupToggle())
     t.Add(M_LOG, (*) => OpenLog())
     t.Add()
-    t.Add("Выход", (*) => ExitApp())
-    t.Default := M_PROBE
+    t.Add("Exit", (*) => ExitApp())
+    t.Default := M_LOG
     Status()
 }
 
 Status() {
-    global dotaPause, dotaLive, closeX, closeY, panelX
-    global M_PAUSE, M_RUN, DOTA_LNK, clogOk
-    s := dotaPause ? "пауза"
-       : dotaLive != 1 ? "доты нет"
-       : clogOk ? "жду матч (по логу доты)"
-       : !closeX || !panelX ? "нужны точки: Ctrl+Alt+C и Ctrl+Alt+W"
-       : !Under(closeX, closeY) ? "дота закрыта другим окном"
-       : InMenu() ? "меню — жду окно принятия"
-       : "не меню (бой или загрузка)"
-    A_IconTip := "Dota auto-accept — " . s
+    global dotaPause, dotaLive, clogOk, optMatch, optInvite, optNtfy
+    global M_MATCH, M_INV, M_PAUSE, M_RUN, M_NTFY, DOTA_LNK, issues
+    s := dotaPause ? "paused"
+       : issues.Count ? "PROBLEM: " . IssueText()
+       : dotaLive != 1 ? "Dota is not running, waiting"
+       : clogOk ? "armed (reading the Dota log)"
+       : "looking for the Dota log"
+    A_IconTip := SubStr("Dota auto-accept — " . s, 1, 127)
+    UpdateIcon()
     try {
         t := A_TrayMenu
-        if dotaPause
-            t.Check(M_PAUSE)
-        else
-            t.Uncheck(M_PAUSE)
-        if FileExist(DOTA_LNK)
-            t.Check(M_RUN)
-        else
-            t.Uncheck(M_RUN)
+        for item, on in Map(M_MATCH, optMatch, M_INV, optInvite,
+                            M_NTFY, optNtfy,
+                            M_PAUSE, dotaPause, M_RUN, FileExist(DOTA_LNK)) {
+            if on
+                t.Check(item)
+            else
+                t.Uncheck(item)
+        }
     }
 }
 
-TogglePause(*) {
-    global dotaPause, hits, clicks, seenAt
-    dotaPause := !dotaPause
-    hits := 0, clicks := 0, seenAt := 0
-    Log(dotaPause ? "ПАУЗА вручную" : "снова авто")
+ToggleOpt(which) {
+    global optMatch, optInvite, optNtfy, DOTA_INI
+    if which = "ntfy" {
+        optNtfy := !optNtfy
+        IniWrite optNtfy ? 1 : 0, DOTA_INI, "options", "ntfy"
+        Log("ntfy notifications: " . (optNtfy ? "on" : "off"))
+    } else if which = "match" {
+        optMatch := !optMatch
+        IniWrite optMatch ? 1 : 0, DOTA_INI, "options", "match"
+        Log("auto-accept of matches: " . (optMatch ? "on" : "off"))
+    } else {
+        optInvite := !optInvite
+        IniWrite optInvite ? 1 : 0, DOTA_INI, "options", "invite"
+        Log("auto-accept of party invites: " . (optInvite ? "on" : "off"))
+    }
     Status()
-    Note(dotaPause ? "Dota auto-accept: ПАУЗА`n(Ctrl+Alt+P — обратно)"
-                   : "Dota auto-accept: авто", 2000, true)
+}
+
+TogglePause(*) {
+    global dotaPause
+    dotaPause := !dotaPause
+    Log(dotaPause ? "PAUSED manually" : "auto again")
+    Status()
+    Note(dotaPause ? "Dota auto-accept: PAUSED`n(Ctrl+Alt+P to resume)"
+                   : "Dota auto-accept: active")
 }
 
 ^!p::TogglePause()
+
+; ── main tick ──────────────────────────────────────────────────────
+Tick() {
+    global DOTA_EXE, DOTA_POLL, DOTA_IDLE
+    global dotaLive, dotaPause, clogPath, clogPos, clogOk, clogSaid
+    global CLOG_READY, CLOG_MINE, CLOG_START, CLOG_INV, CLOG_INVOK
+    global readyAt, readyDone, readyTries, invAt, invDone, invTried
+    global READY_GAP, curLobby, lastTry, CLOG_TRIES, RETRY_MS
+    global optMatch, optInvite, readyFail, alertedFor, NTFY_FAIL_MS
+    global invPending, invUntil, invRetryAt, invMissLogged
+    global issues, dotaSince, lastGrow
+    static lastBeat := A_TickCount
+
+    live := ProcessExist(DOTA_EXE) ? 1 : 0
+    if live != dotaLive {
+        dotaLive := live
+        ;        ; Look for the log again: a new Dota session has a new one, and the
+        ;        ; position must be set to its end again.
+        clogOk := false, clogPos := 0
+        readyDone := false, invDone := false
+        clogSaid := false
+        issues.Clear()
+        dotaSince := A_TickCount
+        Log(live ? "Dota started — armed" : "Dota closed — sleeping")
+        Status()
+        SetTimer Tick, live ? DOTA_POLL : DOTA_IDLE
+        if live
+            CheckLaunchOpts()
+    }
+    if !live || dotaPause
+        return
+    ;    ; Heartbeat every 15 minutes: the last "alive" line shows when the script
+    ;    ; stopped if it ever dies silently.
+    if A_TickCount - lastBeat > 900000 {
+        lastBeat := A_TickCount
+        Log("alive")
+    }
+
+    if !clogOk {
+        clogPath := ClogFind()
+        if clogPath != "" {
+            try clogPos := FileGetSize(clogPath)
+            clogOk := true
+            lastGrow := A_TickCount
+            DelIssue("nolog")
+            Log("Dota log found, working from it: " . clogPath)
+            Status()
+        } else {
+            ;            ; The log does not appear right after launch: give Dota 90 seconds.
+            if !clogSaid && A_TickCount - dotaSince > 90000 {
+                clogSaid := true
+                Log("Dota's console.log was not found 90 s after launch. "
+                    . "Check -condebug in the launch options (Steam → Dota 2 "
+                    . "→ Properties) and restart it")
+                if !issues.Has("opts") {
+                    AddIssue("nolog", "Dota's console.log not found")
+                    Hint("The script cannot see Dota 2's log. Make sure the launch options "
+                         . "contain -condebug, then restart Dota.")
+                }
+            }
+            return
+        }
+    }
+    _new := ClogNew()
+    ;    ; Watchdog: in the menu and in a match Dota writes to the log at least about
+    ;    ; once a minute (measured: the longest silence in 2 hours was 61 s). 5+ minutes
+    ;    ; of silence means the wrong log is read or Dota is hung; the icon shows "II".
+    if _new != "" {
+        lastGrow := A_TickCount
+        if issues.Has("silent") {
+            DelIssue("silent")
+            Log("Dota log is flowing again")
+        }
+    } else if A_TickCount - lastGrow > 300000 && !issues.Has("silent") {
+        AddIssue("silent", "Dota log silent for 5+ minutes")
+        Log("Dota log silent for 5+ minutes — the script may be blind")
+    }
+    if _new = "" {
+        InvRetry()
+        return
+    }
+    if InStr(_new, CLOG_MINE) {
+        SetTimer NtfyMatchFail, 0       ; you accepted yourself: no alert needed
+        readyDone := true               ; accepted by you, nothing for us to do
+        readyAt := A_TickCount
+    }
+    if InStr(_new, CLOG_START)
+        Log("server assigned — match is starting")
+    ;    ; PARTY. Its own event, separate from the ready-check: an invite arrives both
+    ;    ; in the menu and in the middle of a match. Every subscription to Invite is a
+    ;    ; new invite, even if someone answered the previous one a second ago (a friend
+    ;    ; re-sent the party); only a duplicate line within 1.5 s is dropped. The order
+    ;    ; inside the log chunk decides what came later.
+    _pOk := InStr(_new, CLOG_INVOK, , -1)
+    _pInv := InStr(_new, CLOG_INV, , -1)
+    if _pOk {
+        invDone := true                 ; answered by you or by us
+        invPending := false
+    }
+    if _pInv > _pOk {
+        if A_TickCount - invAt > 1500 {
+            invDone := false, invTried := 0
+            invPending := true, invUntil := A_TickCount + 40000
+            invRetryAt := A_TickCount + 1000, invMissLogged := false
+            Log(optInvite ? "PARTY INVITE (log)"
+                : "PARTY INVITE — auto-accept is off, leaving it alone")
+        }
+        invAt := A_TickCount
+        if !invDone && optInvite
+            TryAccept("party")
+    }
+    ;    ; A new lobby is a different match, and the only reliable sign of it.
+    _lob := LobbyId(_new)
+    if _lob != "" && _lob != curLobby {
+        curLobby := _lob
+        readyDone := false, readyTries := 0, lastTry := 0
+        readyFail := false
+        Log("new lobby " . _lob)
+    }
+    if InStr(_new, CLOG_READY) {
+        ;        ; All candidates missed: try again after RETRY_MS: the window stays up
+        ;        ; for ~25 seconds, and we keep clicking until the game registers it.
+        if optMatch && !readyDone && readyTries >= CLOG_TRIES
+           && A_TickCount - lastTry > RETRY_MS {
+            readyTries := 0
+            Log("window is still up — trying candidates again")
+        }
+        if A_TickCount - readyAt > READY_GAP {
+            ;            ; A new ready-check only if there was no signal for a long time:
+            ;            ; while candidates were being tried, the same match could look new,
+            ;            ; and the cursor jumped five more times after the accept.
+            readyDone := false, readyTries := 0, readyFail := false
+            Log(optMatch ? "MATCH FOUND (log: ready-check)"
+                : "MATCH FOUND — auto-accept is off, leaving it alone")
+        }
+        readyAt := A_TickCount
+        if !readyDone && curLobby != alertedFor {
+            alertedFor := curLobby
+            if optMatch
+                SetTimer NtfyMatchFail, -NTFY_FAIL_MS
+            else {
+                readyFail := true
+                Ntfy("Match found, auto-accept is off — accept it yourself!",
+                     "high", "rotating_light")
+            }
+        }
+        if !readyDone && optMatch
+            TryAccept()
+    }
+    InvRetry()
+}
 
 StartupToggle(*) {
     global DOTA_LNK
     if FileExist(DOTA_LNK) {
         try FileDelete(DOTA_LNK)
-        Log("убран из автозагрузки")
-        Note("С Windows больше не запускается", 2500, true)
+        Log("removed from startup")
+        Note("No longer starts with Windows", 2500, true)
     } else {
         try {
             FileCreateShortcut(A_ScriptFullPath, DOTA_LNK, A_ScriptDir)
-            Log("добавлен в автозагрузку")
-            Note("Теперь запускается вместе с Windows", 2500, true)
+            Log("added to startup")
+            Note("Now starts with Windows", 2500, true)
         } catch as e {
-            Note("не вышло положить ярлык:`n" . e.Message, 4000, true)
+            Note("could not create the shortcut:`n" . e.Message, 4000, true)
         }
     }
     Status()
@@ -769,144 +922,19 @@ StartupToggle(*) {
 OpenLog(*) {
     global DOTA_LOGF
     if !FileExist(DOTA_LOGF)
-        return Note("лог пока пустой", 2000, true)
+        return Note("the log is empty so far", 2000, true)
     try Run(DOTA_LOGF)
 }
 
-; ── снятие точек ─────────────────────────────────────────────────────
-; Координаты берём сразу, цвет через DOTA_SAMPLE_WAIT: кнопка под курсором
-; подсвечивается, и снятый «наведённый» цвет потом не совпал бы никогда.
-GrabStart(which) {
-    global DOTA_SAMPLE_WAIT, pend
-    MouseGetPos &mx, &my
-    pend := (which = "accept" || which = "invb") ? Px(mx, my) : 0
-    nm := which = "close" ? "КНОПКИ ЗАКРЫТИЯ"
-        : which = "panel" ? "ПАНЕЛИ окна принятия"
-        : which = "invp" ? "ПАНЕЛИ приглашения"
-        : which = "invb" ? "КНОПКИ приглашения" : "ЗЕЛЁНОЙ кнопки"
-    Note(Format("точка {4} {1},{2} взята. Убери мышь — цвет через {3} с",
-                mx, my, DOTA_SAMPLE_WAIT // 1000, nm), DOTA_SAMPLE_WAIT,
-         true)
-    SetTimer () => GrabColor(which, mx, my), -DOTA_SAMPLE_WAIT
-}
-
-GrabColor(which, x, y) {
-    global closeX, closeY, closeC, panelX, panelY, panelC
-    global btnX, btnY, btnC, btnH, pend, DOTA_INI
-    global autoClose, autoPanel, autoBtn
-    global invPX, invPY, invPC, invBX, invBY, invBC, invBH
-    c := Px(x, y)
-    if c = -1
-        return Note("цвет считать не удалось", 1500, true)
-    sec := (which = "accept") ? "accept"
-         : (which = "invp" || which = "invb") ? "invite" : which
-    if which = "close"
-        closeX := x, closeY := y, closeC := c, autoClose := false
-    else if which = "panel"
-        panelX := x, panelY := y, panelC := c, autoPanel := false
-    else if which = "invp" {
-        invPX := x, invPY := y, invPC := c
-        IniWrite x, DOTA_INI, "invite", "px"
-        IniWrite y, DOTA_INI, "invite", "py"
-        IniWrite c, DOTA_INI, "invite", "pcolor"
-    } else if which = "invb" {
-        invBX := x, invBY := y, invBC := c
-        invBH := (pend != -1 && pend && !Same(pend, c)) ? pend : 0
-        IniWrite x, DOTA_INI, "invite", "bx"
-        IniWrite y, DOTA_INI, "invite", "by"
-        IniWrite c, DOTA_INI, "invite", "bcolor"
-        IniWrite invBH, DOTA_INI, "invite", "bhover"
-    } else {
-        btnX := x, btnY := y, btnC := c, autoBtn := false
-        ; Подсвеченный цвет берём, только если он сам отличается от обычного:
-        ; иначе это не подсветка, а тот же фон.
-        btnH := (pend != -1 && pend && !Same(pend, c)) ? pend : 0
-        IniWrite btnH, DOTA_INI, "accept", "hover"
-    }
-    if which != "invp" && which != "invb" {
-        IniWrite x, DOTA_INI, sec, "x"
-        IniWrite y, DOTA_INI, sec, "y"
-        IniWrite c, DOTA_INI, sec, "color"
-    }
-    nm := which = "close" ? "кнопки закрытия"
-        : which = "panel" ? "панели окна"
-        : which = "invp" ? "панели приглашения"
-        : which = "invb" ? "кнопки приглашения" : "зелёной кнопки"
-    Note(Format("точка {4} запомнена: {1},{2}  цвет {3:#06x}", x, y, c, nm)
-         . ((which = "accept" && btnH)
-            ? Format("`nподсвеченный {1:#06x}", btnH) : ""), 4000, true)
-    Status()
-}
-
-; СНИМОК в момент, когда окно принятия висит. Прицеливаться не надо: точки
-; уже запомнены, он читает цвет в них сам. Нужен, чтобы ответить на один
-; оставшийся вопрос — затемнена ли кнопка закрытия уже в этот момент или
-; только после принятия. Плюс пишет в лог весь столбец, где живёт зелёная
-; кнопка: по нему её точка ставится точно, а не на глаз.
-^!d:: {
-    global closeX, closeY, closeC, panelX, panelY, panelC, DOTA_INI
-    cc := Px(closeX, closeY), pc := Px(panelX, panelY)
-    IniWrite cc, DOTA_INI, "found", "close"
-    IniWrite pc, DOTA_INI, "found", "panel"
-    _cs := Same(cc, closeC) ? "как в меню" : "ДРУГАЯ"
-    _ps := Same(pc, panelC) ? "как у окна принятия" : "другая"
-    Log(Format("СНИМОК: кнопка закрытия {1},{2} = {3:#06x} ({4}), панель "
-        . "{5},{6} = {7:#06x} ({8})", closeX, closeY, cc, _cs,
-        panelX, panelY, pc, _ps))
-    DumpColumn("СНИМОК")
-    Note(Format("снято, записано в лог:`nкнопка закрытия {1:#06x} — {2}`n"
-        . "панель {3:#06x} — {4}", cc, _cs, pc, _ps), 6000, true)
-}
-
-^!k::GrabStart("invp")
-^!j::GrabStart("invb")
-
-^!c::GrabStart("close")
-^!w::GrabStart("panel")
-^!f::GrabStart("accept")
-
-; ── что видно сейчас ─────────────────────────────────────────────────
-^!t::Probe()
-
-Probe(*) {
-    global closeX, closeY, closeC, panelX, panelY, panelC, btnX, btnY
-    global dotaPause, dotaLive, DOTA_EXE
-    global invPX, invPY, invPC, invBX, invBY, invBC
-    b := FindButton()
-    Note(Format("состояние: {1}`n`n"
-        . "кнопка закрытия {2},{3}`n  запомнен {4:#06x}, сейчас {5:#06x} — {6}`n"
-        . "панель окна {7},{8}`n  запомнен {9:#06x}, сейчас {10:#06x} — {11}`n"
-        . "зелёная кнопка: {12}`n`n{13}`n`nпати: {14}",
-        dotaPause ? "ПАУЗА" : !ProcessExist(DOTA_EXE) ? "доты нет"
-            : !Under(closeX, closeY) ? "дота закрыта другим окном"
-            : InMenu() ? "меню" : "не меню (бой или загрузка)",
-        closeX, closeY, closeC, Px(closeX, closeY),
-        InMenu() ? "совпало (мы в меню)" : "нет",
-        panelX, panelY, panelC, Px(panelX, panelY),
-        DialogUp() ? "СОВПАЛО (окно принятия висит)" : "нет",
-        b ? Format("{1},{2}", b[1], b[2]) : "не найдена",
-        (InMenu() && DialogUp()) ? "сейчас я бы нажал"
-                                 : "сейчас нажатия не будет",
-        !invPX ? "точки не сняты (Ctrl+Alt+K и Ctrl+Alt+J)"
-               : (Same(Px(invPX, invPY), invPC)
-                  && Same(Px(invBX, invBY), invBC))
-                 ? "приглашение вижу — нажал бы" : "приглашения нет"),
-        8000, true)
-}
-
-; ЖМЁМ. Вызывается, когда лог сказал, что идёт ready-check. Щёлкаем по
-; кандидату и ЖДЁМ ПОДТВЕРЖДЕНИЯ: дота сама пишет в лог наш клик строкой
-; Send 7070. Нет подтверждения — значит промах, берём следующего кандидата.
-; Это и есть то, чего не было у пиксельной версии: она надеялась, а эта
-; знает.
-; НАЖАТИЕ БЕЗ МЫШИ. Шлём окну доты сообщения о щелчке в его координатах —
-; курсор не трогается вообще. Panorama может их проигнорировать, поэтому
-; это только первая попытка: если лог не подтвердит, жмём настоящим кликом.
-; slow — для всплывашек. Факт: на приглашении в пати быстрое тихое нажатие
-; (движение, 20 мс, клик) не прошло, мышью прошло. ГИПОТЕЗА: Panorama вешает
-; :hover на кнопку только на следующем кадре. Поэтому подводим «курсор» в два
-; шага и даём кнопке время подсветиться; сработает ли — смотреть в логе по
-; слову «без мыши» / «мышью» в строке ПРИНЯЛ пати.
+; CLICKING. Called when the log says a ready-check is on. We click a candidate
+; and WAIT FOR CONFIRMATION: Dota itself logs our click as Send 7070. No
+; confirmation means a miss, and we take the next candidate.
+; SILENT CLICK. We post click messages to the Dota window in its own
+; coordinates, the cursor is not touched at all. Panorama may ignore them, so
+; this is only the first attempt: if the log does not confirm, a real click is
+; made. slow is for popups: a fast move-then-click (20 ms) was not accepted on
+; the party popup, probably because Panorama applies :hover on the next frame,
+; so we approach the button in two steps and give it time to highlight.
 ClickSilent(x, y, slow := false) {
     global DOTA_WIN
     try {
@@ -932,13 +960,13 @@ ClickSilent(x, y, slow := false) {
     return false
 }
 
-; ── кнопка ACCEPT во всплывашке приглашения ──────────────────────────
-; Замерено 20.10.2026 на живом приглашении: кнопка СЕРАЯ (0x3b4248 ±), а не
-; зелёная, поэтому поиск зелени её не видит и по пати тыкал в чужое — первым
-; кандидатом шла PLAY главного меню. Окно приглашения по центру, и кнопка
-; стоит в долях окна: x 0.373–0.492, y 0.606–0.647 (правее, с 0.51 — DECLINE).
-; Кликаем в центр ACCEPT, но только если угловые точки кнопки серые: проверка
-; на «а есть ли она вообще», чтобы не щёлкать в игру, когда окна нет.
+; ── the ACCEPT button in the invite popup ──────────────────────────
+; Measured on a live invite: the button is GRAY (~0x3b4248), not green, so a
+; search for green does not see it. The invite window is centered and the
+; button sits at fixed fractions of the window: x 0.373-0.492, y 0.606-0.647
+; (DECLINE starts to the right, from 0.51). We click the center of ACCEPT, but
+; only if the corner points of the button are gray: a check that the button is
+; there at all, so as not to click into the game when there is no window.
 PARTY_BX := 0.430
 PARTY_BY := 0.626
 
@@ -957,10 +985,12 @@ PartyGate(wx, wy, ww, wh) {
     return n >= 3
 }
 
-; Окно рисуется не мгновенно после строки лога, поэтому ждём до ~2.5 с.
-PartyCands(wx, wy, ww, wh) {
+; The window is not drawn instantly after the log line, so wait up to ~1.2 s.
+; If it is not found, Tick retries once a second (see InvRetry): Dota may be
+; covered by another window, and the popup is visible only once you return.
+PartyCands(wx, wy, ww, wh, tries := 8) {
     global PARTY_BX, PARTY_BY
-    Loop 17 {
+    Loop tries {
         cx := wx + Round(ww * PARTY_BX)
         cy := wy + Round(wh * PARTY_BY)
         if PartyGate(wx, wy, ww, wh) && Under(cx, cy)
@@ -970,15 +1000,45 @@ PartyCands(wx, wy, ww, wh) {
     return []
 }
 
-; what: "матч" или "пати". Разница только в том, какую строку лога
-; считать подтверждением и какой кнопку искать.
-TryAccept(what := "матч") {
+; Why the button was not found: is Dota in focus, is the point covered by
+; another window, what colors are at the button corners (should be gray ~0x3b4248).
+PartyDiag(wx, wy, ww, wh) {
+    global DOTA_WIN, PARTY_BX, PARTY_BY
+    s := "Dota in focus: " . (WinActive(DOTA_WIN) ? "yes" : "no")
+    s .= ", under the button: " . (Under(wx + Round(ww * PARTY_BX),
+                                   wy + Round(wh * PARTY_BY)) ? "Dota" : "another window")
+    s .= ", corners:"
+    for d in [[0.385, 0.613], [0.475, 0.613], [0.385, 0.640], [0.475, 0.640]]
+        s .= Format(" {:#08x}", Px(wx + Round(ww * d[1]), wy + Round(wh * d[2])))
+    return s
+}
+
+; The invite arrived but the button is not visible: retry once a second until
+; it is accepted (by us or by you) or 40 s have passed.
+InvRetry() {
+    global invPending, invUntil, invRetryAt, invDone, optInvite
+    if !invPending
+        return
+    if invDone || !optInvite || A_TickCount > invUntil {
+        invPending := false
+        return
+    }
+    if A_TickCount < invRetryAt
+        return
+    invRetryAt := A_TickCount + 1000
+    TryAccept("party")
+}
+
+; what: "match" or "party". The only difference is which log line counts as the
+; confirmation and which button is searched for.
+TryAccept(what := "match") {
     global CLOG_MINE, CLOG_INVOK, CLOG_WAIT, CLOG_TRIES
     global readyDone, readyTries, invDone, invTried
     global holdTill, CLOG_SILENT, CLOG_HOLD, CLOG_READY, readyAt, lastTry
+    global DOTA_WIN, readyFail, invMissLogged
     if A_TickCount < holdTill
-        return false            ; только что приняли, второй раз не надо
-    _wide := (what = "матч")
+        return false            ; just accepted, no need to do it twice
+    _wide := (what = "match")
     try
         WinGetPos &_wx, &_wy, &_ww, &_wh, "ahk_exe dota2.exe"
     catch
@@ -987,12 +1047,22 @@ TryAccept(what := "матч") {
         return false
     _ok := _wide ? CLOG_MINE : CLOG_INVOK
     lastTry := A_TickCount
-    cands := _wide ? FindAccept(true) : PartyCands(_wx, _wy, _ww, _wh)
+    cands := _wide ? FindAccept(true)
+                   : PartyCands(_wx, _wy, _ww, _wh, invMissLogged ? 1 : 8)
     if !cands.Length {
-        Log(what . ": сигнал есть, а кнопку на экране не нашёл")
-        DumpColumn(what . " без кнопки")
+        if _wide {
+            Log(what . ": signal received but the button was not found on screen")
+            DumpColumn(what . " no button")
+        } else if !invMissLogged {
+            invMissLogged := true
+            Log("party: signal received but the button was not found (" . PartyDiag(_wx, _wy,
+                _ww, _wh) . "); retrying for up to 40 s")
+        }
         return false
     }
+    ;    ; A silent click on the right button once failed while a mouse click worked.
+    ;    ; Suspicion: Dota was not in focus; note it in the log.
+    _bg := WinActive(DOTA_WIN) ? "" : ", Dota not in focus"
     for c in cands {
         if (_wide ? readyTries : invTried) >= CLOG_TRIES
             return false
@@ -1000,25 +1070,25 @@ TryAccept(what := "матч") {
             readyTries++
         else
             invTried++
-        ; Сначала тихо, без мыши. Не подтвердилось — тогда уже кликом.
-        _how := "без мыши"
-        ; Всплывашка пати появляется с анимацией: пиксели кнопки уже серые,
-        ; а нажатие она ещё не берёт. Мышью через ~1 с проходило, быстрым
-        ; тихим в первые 100 мс — нет. ГИПОТЕЗА, проверяется логом: даём
-        ; ей отстояться, потом бьём тихо, при неудаче — второй раз с долгим
-        ; наведением, и только потом мышью.
+        ;        ; Silent first, without the mouse. If not confirmed, then a real click.
+        _how := "no mouse"
+        ;        ; The party popup appears with an animation: the button pixels are already
+        ;        ; gray, but it does not take clicks yet. A mouse click ~1 s later worked,
+        ;        ; a fast silent one in the first 100 ms did not. So let it settle, then
+        ;        ; click silently, then a second time with a longer hover, and only then
+        ;        ; with the mouse.
         if !_wide {
             Sleep 700
-            ; За это время приглашение могли принять руками или оно ушло:
-            ; тогда под точкой уже меню, и щёлкать в него нельзя.
+            ;            ; In the meantime the invite may have been accepted by hand or gone:
+            ;            ; then there is a menu under the point, and it must not be clicked.
             _ch := ClogNew()
             if InStr(_ch, _ok) {
                 invDone := true
-                Log("пати: ответили сами, пока ждал — не трогаю")
+                Log("party: answered by someone else while waiting — leaving it alone")
                 return true
             }
             if !PartyGate(_wx, _wy, _ww, _wh) {
-                Log("пати: окно приглашения исчезло — не трогаю")
+                Log("party: the invite window is gone — leaving it alone")
                 return false
             }
         }
@@ -1026,12 +1096,12 @@ TryAccept(what := "матч") {
         t0 := A_TickCount
         _lim := CLOG_SILENT
         _hard := false
-        _slow := _wide                  ; второй тихий — только для пати
+        _slow := false                  ; second silent click, with hover
         while A_TickCount - t0 < _lim {
             Sleep 120
             _ch := ClogNew()
             if InStr(_ch, CLOG_READY)
-                readyAt := A_TickCount      ; сигнал ещё идёт, это тот же матч
+                readyAt := A_TickCount      ; the signal is still coming: same match
             if InStr(_ch, _ok) {
                 if _wide {
                     readyDone := true
@@ -1040,21 +1110,26 @@ TryAccept(what := "матч") {
                               c[3] / _ww)
                 } else
                     invDone := true
-                Log(Format("ПРИНЯЛ {5} {7}: клик {1},{2} (полоса {3} px, "
-                           . "цвет {6:#06x}), дота подтвердила за {4} мс",
+                Log(Format("ACCEPTED {5} {7}: click {1},{2} (band {3} px, "
+                           . "color {6:#06x}), Dota confirmed in {4} ms",
                            c[1], c[2], c[3], A_TickCount - t0, what,
-                           c.Has(4) ? c[4] : 0, _how))
+                           c.Has(4) ? c[4] : 0, _how . _bg))
+                if _wide {
+                    SetTimer NtfyMatchFail, 0
+                    Ntfy(readyFail ? "Match accepted after all" : "Match found and accepted",
+                         "high", "white_check_mark")
+                }
                 return true
             }
             if !_slow && A_TickCount - t0 >= 450 {
                 _slow := true
-                _how := "без мыши (с наведением)"
+                _how := "no mouse (with hover)"
                 ClickSilent(c[1], c[2], true)
             }
-            ; тихое не сработало — добираем настоящим кликом
+            ;            ; the silent click did not work: finish with a real click
             if !_hard && A_TickCount - t0 >= CLOG_SILENT - 120 {
                 _hard := true
-                _how := "мышью"
+                _how := "mouse"
                 _lim := CLOG_SILENT + CLOG_WAIT
                 MouseGetPos &ox, &oy
                 Click c[1] . " " . c[2]
@@ -1062,226 +1137,17 @@ TryAccept(what := "матч") {
                 MouseMove ox, oy, 0
             }
         }
-        Log(Format("{4}: клик {1},{2} (полоса {3} px, цвет {5:#06x}) — "
-                   . "подтверждения нет, пробую следующего", c[1], c[2],
+        Log(Format("{4}: click {1},{2} (band {3} px, color {5:#06x}) — "
+                   . "no confirmation, trying the next one", c[1], c[2],
                    c[3], what, c.Has(4) ? c[4] : 0))
     }
     return false
 }
 
-; ── главный такт ─────────────────────────────────────────────────────
-Tick() {
-    global DOTA_EXE, DOTA_POLL, DOTA_IDLE, DOTA_NEED, DOTA_STUCK
-    global dotaLive, dotaPause, closeX, closeY, panelX
-    global hits, nextAt, seenAt, clicks, dumped
-    global invPX, invPY, invPC, invBX, invBY, invBC, invBH
-    global invHits, invNext, invClicks
-    global clogPath, clogPos, clogOk, clogSaid
-    global CLOG_READY, CLOG_MINE, CLOG_START
-    global CLOG_INV, CLOG_INVOK, CLOG_PARTY
-    global readyAt, readyDone, readyTries
-    global invAt, invDone, invTried
-    global READY_GAP, holdTill, CLOG_LOBBY, curLobby, lastTry
-    global CLOG_TRIES, RETRY_MS
-
-    live := ProcessExist(DOTA_EXE) ? 1 : 0
-    if live != dotaLive {
-        dotaLive := live
-        hits := 0, clicks := 0, seenAt := 0, nextAt := 0, dumped := false
-        ; Лог ищем заново: у новой сессии доты он новый, и позицию надо
-        ; заново поставить в его конец.
-        clogOk := false, clogPos := 0
-        readyDone := false, invDone := false
-        Log(live ? "дота запущена — на взводе" : "дота закрыта — сплю")
-        Status()
-        SetTimer Tick, live ? DOTA_POLL : DOTA_IDLE
-    }
-    if !live || dotaPause
-        return
-    ; Пульс раз в 15 минут: 20.10 скрипт тихо умер посреди дня, и по логу
-    ; нельзя было понять, когда. Теперь последняя строка «жив» покажет.
-    static lastBeat := A_TickCount
-    if A_TickCount - lastBeat > 900000 {
-        lastBeat := A_TickCount
-        Log("жив")
-    }
-
-    ; ── ГЛАВНЫЙ ПУТЬ: лог доты ──────────────────────────────────────
-    if !clogOk {
-        clogPath := ClogFind()
-        if clogPath != "" {
-            try clogPos := FileGetSize(clogPath)
-            clogOk := true
-            Log("лог доты найден, работаю по нему: " . clogPath)
-            Status()
-        } else if !clogSaid {
-            clogSaid := true
-            Log("console.log доты не найден — работаю по экрану. Чтобы "
-                . "работать точно, добавь -condebug в параметры запуска доты")
-        }
-    }
-    if clogOk {
-        _new := ClogNew()
-        if _new != "" {
-            if InStr(_new, CLOG_MINE) {
-                readyDone := true       ; принял он сам, нам делать нечего
-                readyAt := A_TickCount
-            }
-            if InStr(_new, CLOG_START)
-                Log("сервер выдан — матч стартует")
-            ; ПАТИ. Своё событие, мимо ready-check: приглашение приходит
-            ; и в меню, и посреди матча.
-            ; Каждая подписка на Invite — новое приглашение, даже если
-            ; секунду назад кто-то уже ответил на прошлое (друг скинул
-            ; пати повторно). Отбрасываем только дубль строки в пределах
-            ; 1.5 с. Порядок в куске лога решает, что было позже.
-            _pOk := InStr(_new, CLOG_INVOK, , -1)
-            _pInv := InStr(_new, CLOG_INV, , -1)
-            if _pOk
-                invDone := true         ; ответил он сам или мы
-            if _pInv > _pOk {
-                if A_TickCount - invAt > 1500 {
-                    invDone := false, invTried := 0
-                    Log("ПРИГЛАШЕНИЕ В ПАТИ (лог)")
-                }
-                invAt := A_TickCount
-                if !invDone
-                    TryAccept("пати")
-            }
-            ; Новое лобби — это другой матч, и единственный верный признак.
-            _lob := LobbyId(_new)
-            if _lob != "" && _lob != curLobby {
-                curLobby := _lob
-                readyDone := false, readyTries := 0, lastTry := 0
-                Log("новое лобби " . _lob)
-            }
-            if InStr(_new, CLOG_READY) {
-                ; Все кандидаты промазали — через RETRY_MS пробуем снова:
-                ; окно висит ~25 секунд, а «кликаем пока игру не регнет».
-                if !readyDone && readyTries >= CLOG_TRIES
-                   && A_TickCount - lastTry > RETRY_MS {
-                    readyTries := 0
-                    Log("окно ещё висит — пробую кандидатов заново")
-                }
-                if A_TickCount - readyAt > READY_GAP {
-                    ; Новый ready-check — только если сигнала не было
-                    ; совсем давно. Пять секунд оказалось мало: пока
-                    ; перебирались кандидаты, тот же матч успевал
-                    ; показаться новым, и курсор дёргался ещё пять раз
-                    ; уже после принятия.
-                    readyDone := false, readyTries := 0
-                    Log("МАТЧ НАЙДЕН (лог: ready-check)")
-                }
-                readyAt := A_TickCount
-                if !readyDone
-                    TryAccept()
-            }
-        }
-        return                          ; по экрану больше ничего не решаем
-    }
-
-    if !AutoPoints() || !closeX || !panelX
-        return                      ; окна ещё нет или точек нет
-    ; Дота жива, но не видна — все пиксели в этот момент чужие.
-    if !Under(closeX, closeY) {
-        hits := 0, seenAt := 0
-        return
-    }
-    ; 0. ПРИГЛАШЕНИЕ В ПАТИ — до всего остального и мимо кнопки закрытия:
-    ;    всплывашка приходит и посреди матча. Зато требует совпадения ДВУХ
-    ;    своих точек сразу — панели и кнопки. Одной зелёной мало, на этом
-    ;    мы уже обожглись: тёмно-зелёный есть и в траве, и в панелях.
-    if invPX && invBX {
-        if Same(Px(invPX, invPY), invPC)
-           && (Same(Px(invBX, invBY), invBC)
-               || (invBH && Same(Px(invBX, invBY), invBH)))
-           && Under(invBX, invBY) {
-            if ++invHits >= DOTA_NEED && A_TickCount >= invNext {
-                invHits := 0
-                MouseGetPos &iox, &ioy
-                Click invBX . " " . invBY
-                Sleep 60
-                MouseMove iox, ioy, 0
-                invNext := A_TickCount + 2000
-                invClicks++
-                Log(Format("приглашение в пати: клик по {1},{2} (клик {3})",
-                           invBX, invBY, invClicks))
-                if invClicks >= DOTA_STUCK {
-                    dotaPause := true
-                    invClicks := 0
-                    Log("приглашение не исчезает после " . DOTA_STUCK
-                        . " кликов — пауза")
-                    Status()
-                    return Note("Щёлкнул " . DOTA_STUCK . " раз по "
-                        . "приглашению, а оно на месте — встал на ПАУЗУ."
-                        . "`nПересними его точки: Ctrl+Alt+K и Ctrl+Alt+J.",
-                        10000, true)
-                }
-            }
-        } else
-            invHits := 0, invClicks := 0
-    }
-    ; 1. мы в меню? В бою кнопки закрытия на экране нет, и это единственная
-    ;    защита, которая нужна: щёлкать посреди матча нельзя.
-    if !InMenu() {
-        hits := 0, seenAt := 0, dumped := false
-        return
-    }
-    ; 2. висит ли окно принятия
-    if !DialogUp() {
-        hits := 0, seenAt := 0, dumped := false, clicks := 0
-        return
-    }
-    if A_TickCount < nextAt
-        return                      ; только что жали, даём окну исчезнуть
-    if !seenAt
-        seenAt := A_TickCount
-    if ++hits < DOTA_NEED
-        return
-    hits := 0
-    b := FindButton()
-    if !b {
-        if !dumped {
-            dumped := true
-            DumpColumn()
-            Note("окно принятия вижу, а зелёной кнопки не нашёл.`nНаведись на "
-                 . "неё и нажми Ctrl+Alt+F — столбец я записал в лог.",
-                 6000, true)
-        }
-        nextAt := A_TickCount + 1000
-        return
-    }
-    el := A_TickCount - seenAt
-    MouseGetPos &ox, &oy
-    Click b[1] . " " . b[2]
-    Sleep 60
-    MouseMove ox, oy, 0             ; мышь обратно, без анимации
-    seenAt := 0
-    nextAt := A_TickCount + 900     ; короткая пауза: если первый клик ушёл
-                                    ; на поднятие окна, следующий опрос добьёт
-    clicks++
-    Log(Format("клик по {1},{2}: {3} мс от появления панели (клик {4})",
-               b[1], b[2], el, clicks))
-    ; Настоящее окно после клика уходит. Не уходит — значит мы щёлкаем не
-    ; туда, и лучше встать на паузу, чем тыкать до утра.
-    if clicks >= DOTA_STUCK {
-        dotaPause := true
-        clicks := 0
-        Log("окно принятия не исчезает после " . DOTA_STUCK . " кликов — пауза")
-        Status()
-        return Note("Щёлкнул " . DOTA_STUCK . " раз, а окно принятия на месте."
-            . "`nЗначит жму не туда — встал на ПАУЗУ.`nНаведись на зелёную "
-            . "кнопку, Ctrl+Alt+F, потом Ctrl+Alt+P обратно в авто.",
-            10000, true)
-    }
-    ; Про принятый матч молчим: он и так начался, а тултипса поверх игры —
-    ; это ровно то, чего он просил не делать.
-}
-
-; ПЕРВЫЙ ЗАПУСК. Весь смысл в том, чтобы «скачал, нажал кнопочку и всё
-; работает» — поэтому при первом же запуске он сам кладёт ярлык в
-; автозагрузку и больше про это не вспоминает (метка в ini). Выключить —
-; там же в трее, галка «Запускать вместе с Windows».
+; FIRST RUN. The whole point is "download, click, and it works": on the very
+; first run the script puts a shortcut into Startup itself and never mentions it
+; again (a flag in the ini). To turn it off use the "Start with Windows" item in
+; the tray menu.
 FirstRun() {
     global DOTA_INI, DOTA_LNK
     if IniRead(DOTA_INI, "setup", "done", "") != ""
@@ -1291,16 +1157,18 @@ FirstRun() {
         return
     try {
         FileCreateShortcut(A_ScriptFullPath, DOTA_LNK, A_ScriptDir)
-        Log("первый запуск: положил ярлык в автозагрузку")
-        Note("Автопринятие матча включено и будет включаться с Windows."
-             . "`nВыключить — значок в трее, Ctrl+Alt+P пауза."
-             . "`nБольше я ничего показывать не буду.", 7000, true)
+        Log("first run: startup shortcut created")
+        Note("Match auto-accept is on and will start with Windows."
+             . "`nTo turn it off use the tray icon; Ctrl+Alt+P pauses."
+             . "`nThis message will not appear again.", 7000, true)
     } catch as e {
-        Log("первый запуск: ярлык не положил — " . e.Message)
+        Log("first run: could not create the shortcut — " . e.Message)
     }
 }
 
+NtfyInit()
 BuildTray()
+EarlyCheck()
 FirstRun()
-Log("скрипт запущен")
+Log("script started")
 SetTimer Tick, 100
