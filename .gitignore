@@ -1,6 +1,10 @@
-# Created next to the script while it runs: personal data (lobby IDs, your click points)
-dota_log.txt
+# Created next to the script while it runs: personal data (private ntfy topic, remembered button spots, lobby IDs)
 dota_accept.ini
+dota_pick.ini
+dota_log.txt
+snapshots/
 bak/
 # AutoHotkey's own binary is not part of this project
 *.exe
+# generated
+__pycache__/
