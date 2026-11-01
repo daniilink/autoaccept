@@ -3,6 +3,9 @@ dota_accept.ini
 dota_pick.ini
 dota_log.txt
 snapshots/
+# your own Dota settings profile and the files it replaced
+profile/
+bak_profile/
 bak/
 # AutoHotkey's own binary is not part of this project
 *.exe

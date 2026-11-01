@@ -83,6 +83,7 @@ invDone := false         ; this invite is already answered
 invTried := 0            ; candidates tried so far
 holdTill := 0            ; (post-accept pause is not used)
 curLobby := ""           ; lobby ID of the current ready-check
+seenLobbies := Map()     ; lobby IDs already seen: after a match Dota writes the same lobby into the log again
 lastTry := 0             ; last time candidates were tried
 learned := []            ; remembered successful spots, as window fractions
 
@@ -97,6 +98,14 @@ optNtfy := IniRead(DOTA_INI, "options", "ntfy", "1") != "0"
 ntfyServer := RTrim(IniRead(DOTA_INI, "ntfy", "server", "https://ntfy.sh"), "/")
 ntfyTopic := IniRead(DOTA_INI, "ntfy", "topic", "")
 ntfyJobs := []           ; requests in flight, to check their status later
+
+; Steam keeps the launch options of a game separately for every account. If this is
+; on, the script adds the missing flags (-condebug by default) to the accounts
+; Steam is not running under right now. Off by default.
+optSteamFix := IniRead(DOTA_INI, "steam", "fix", "0") != "0"
+STEAM_FLAGS := StrSplit(RegExReplace(Trim(IniRead(DOTA_INI, "steam", "flags", "-condebug")), "\s+", " "), " ")
+if !IndexOf(STEAM_FLAGS, "-condebug")
+    STEAM_FLAGS.Push("-condebug")
 readyFail := false       ; the "could not accept" alert was already sent for this ready-check
 alertedFor := "-"        ; lobby the alert is already armed for
 issues := Map()          ; current problems: key -> text (the tray icon turns into "pause")
@@ -315,6 +324,13 @@ FindAccept(wide := true) {
         if !Under(cx, cy)
             continue
         _e := [cx, cy, _w, e[4]]
+        ; The match accept button is always at the center of the window. Bands at the edges
+        ; are side panels of the menu: they go to the end of the list and are never "remembered".
+        _fx := (cx - wx) / ww
+        if wide && (_fx < 0.3 || _fx > 0.7) {
+            _c.Push(_e)
+            continue
+        }
         _hit := false
         for L in learned {
             ;            ; Match the width too: a 1040 px background panel may now lie where
@@ -416,6 +432,28 @@ LobbyId(txt) {
     return e ? SubStr(_s, 1, e - 1) : ""
 }
 
+; All the lobbies that are already in the log (the script may start in the middle of a
+; Dota session). On 1.11, after a match Dota wrote into the log a lobby the script did
+; not remember (it had just been restarted), it passed for a new one, and the "find the
+; window on the screen" fallback took a green button of the post-match screen for the
+; accept button: five false clicks and a false alarm to the phone.
+SeedLobbies(path) {
+    global seenLobbies, CLOG_LOBBY
+    try {
+        f := FileOpen(path, "r")
+        txt := f.Read()
+        f.Close()
+    } catch
+        return
+    pos := 1
+    while pos := InStr(txt, CLOG_LOBBY, , pos) {
+        pos += StrLen(CLOG_LOBBY)
+        e := InStr(txt, ">", , pos)
+        if e && e - pos < 40
+            seenLobbies[SubStr(txt, pos, e - pos)] := true
+    }
+}
+
 ; New bytes of the log. Only the tail is read: the file grows by tens of
 ; kilobytes per session, there is no point in re-reading all of it five times
 ; a second.
@@ -461,7 +499,9 @@ LearnLoad() {
         if _v = ""
             continue
         _p := StrSplit(_v, ",")
-        if _p.Length >= 3
+        ; A remembered spot at the window edge is a mistake (on 30.10 somebody else's click was
+        ; counted as the confirmation): the accept button is at the center.
+        if _p.Length >= 3 && Abs(_p[1] - 0.5) <= 0.2
             learned.Push([_p[1] + 0, _p[2] + 0, _p[3] + 0])
     }
 }
@@ -556,27 +596,43 @@ UpdateIcon() {
     }
 }
 
-; A quiet Windows notification at the bottom of the screen, at most three times
-; in total, so as not to nag someone who does not intend to add the option. The
-; counter is reset once the option is found.
-Hint(text) {
-    global DOTA_INI
-    n := Integer(IniRead(DOTA_INI, "state", "hints", "0"))
-    if n >= 3
-        return
-    IniWrite n + 1, DOTA_INI, "state", "hints"
-    try TrayTip(text, "Dota auto-accept", "Iconi Mute")
-}
-
-HintReset() {
-    global DOTA_INI
-    if IniRead(DOTA_INI, "state", "hints", "0") != "0"
-        IniWrite 0, DOTA_INI, "state", "hints"
+; A Windows notification at the bottom of the screen. loud = with sound (the first
+; reminder), repeats are silent. Without -condebug the script does nothing, so we
+; remind at every Dota start, not "at most three times".
+Hint(text, loud := false) {
+    try TrayTip(text, "Dota auto-accept", loud ? "Icon!" : "Iconi Mute")
 }
 
 HINT_TEXT := "Dota 2 was started without the -condebug launch option, so the script cannot see matches. "
            . "In Steam: Dota 2 → Properties → Launch Options: add -condebug "
            . "and restart Dota."
+
+; What exactly is wrong: Steam has no such option for this account (every Steam
+; account has its own launch options), or it is set but Dota was started around
+; it (it restarted itself, or not with the Play button).
+OptsText() {
+    global HINT_TEXT
+    o := SteamLaunchOptions()
+    if o = -1
+        return HINT_TEXT
+    if InStr(o, "-condebug")
+        return "Dota 2 was started without -condebug although it is set in Steam: it was not started "
+             . "with the Play button (or it restarted itself). Close Dota and "
+             . "start it again through Steam."
+    return "Dota 2 was started without -condebug, so the script cannot see matches. In Steam, for "
+         . "this account the option is not set: Dota 2 → Properties → Launch "
+         . "Options → -condebug."
+}
+
+; While Dota runs without -condebug, remind every 10 minutes.
+RemindOpts() {
+    global issues
+    if !issues.Has("opts") {
+        SetTimer RemindOpts, 0
+        return
+    }
+    Hint(OptsText())
+}
 
 ; When Dota is ALREADY running: the process command line is the only reliable
 ; answer to whether it was started with -condebug.
@@ -590,18 +646,18 @@ DotaCmdLine() {
 }
 
 CheckLaunchOpts() {
-    global HINT_TEXT
     cmd := DotaCmdLine()
     if cmd = ""
         return                          ; could not read it, so do not guess
     if InStr(cmd, "-condebug") {
         DelIssue("opts")
-        HintReset()
+        SetTimer RemindOpts, 0
         return
     }
     AddIssue("opts", "Dota started without -condebug")
     Log("Dota was started without -condebug: the script cannot see matches")
-    Hint(HINT_TEXT)
+    Hint(OptsText(), true)
+    SetTimer RemindOpts, 600000
 }
 
 ; When Dota is not running yet: what is entered in the launch options in Steam
@@ -648,20 +704,626 @@ SteamLaunchOptions() {
 }
 
 ; Once at script start, while Dota is not running: if Steam has no such option,
-; say so right away rather than after the first missed match.
+; offer to write it right away rather than after the first missed match.
 EarlyCheck() {
-    global HINT_TEXT, DOTA_EXE
+    global DOTA_EXE
     if ProcessExist(DOTA_EXE)
         return                          ; already running: Tick checks the process
     o := SteamLaunchOptions()
-    if o = -1
+    if o != -1 && !InStr(o, "-condebug")
+        Log("the Dota 2 launch options in Steam do not contain -condebug")
+    SetTimer OfferSteamFix, -8000       ; it decides by itself whether there is anything to offer
+}
+
+; ── launch options of other Steam accounts ─────────────────────────
+; Steam keeps the launch options of a game separately for every account: in
+; userdata\<id>\config\localconfig.vdf, block apps\570. The account Steam is
+; running under right now is held in memory and Steam will overwrite its file on
+; exit, so only the other accounts are touched. Before the first edit a copy is
+; put next to the file (.bak_dotaaccept); after the edit the file is read again
+; and, if it does not parse, the edit is rolled back.
+
+VdfPath(a) {
+    s := ""
+    for k in a
+        s .= (A_Index > 1 ? "/" : "") . k
+    return s
+}
+
+; Parsing a Steam file in VDF format: where in the text the Steam, apps and 570 blocks
+; are and the value of the key inside 570. root is the path to the Steam block (lower
+; case, separated by "/"). ok = the braces matched up to the end of the file.
+VdfScan(txt, root, key) {
+    r := Map("steam", 0, "apps", 0, "app", 0, "kPos", 0, "kLen", 0, "val", "", "ok", false)
+    depth := [], pend := "", pos := 1
+    ; Tokens are found by a plain character search and the closing quote by hand: the
+    ; file has JSON strings of tens of kilobytes, and a regular expression hits the
+    ; PCRE limit on them and silently stops the parse.
+    while pos := RegExMatch(txt, '["{}]', &m, pos) {
+        at := pos
+        if m[0] = "{" {
+            pos++
+            depth.Push(StrLower(pend))
+            pend := ""
+            p := VdfPath(depth)
+            if !r["steam"] && p = root
+                r["steam"] := pos
+            else if !r["apps"] && p = root . "/apps"
+                r["apps"] := pos
+            else if !r["app"] && p = root . "/apps/570"
+                r["app"] := pos
+        } else if m[0] = "}" {
+            pos++
+            if !depth.Length
+                return r
+            depth.Pop()
+        } else {
+            q := at + 1
+            Loop {
+                q := InStr(txt, '"', true, q)
+                if !q
+                    return r            ; unclosed quote: the file is broken
+                b := 0, k := q - 1
+                while k > at && SubStr(txt, k, 1) = "\" {
+                    b++
+                    k--
+                }
+                if Mod(b, 2) = 0
+                    break               ; an even number of backslashes before the quote: it is a real one
+                q++
+            }
+            str := SubStr(txt, at + 1, q - at - 1)
+            pos := q + 1
+            if pend = "" {
+                pend := str
+            } else {
+                if !r["kPos"] && StrLower(pend) = key
+                   && VdfPath(depth) = root . "/apps/570" {
+                    r["kPos"] := at, r["kLen"] := q - at + 1, r["val"] := str
+                }
+                pend := ""
+            }
+        }
+    }
+    r["ok"] := !depth.Length && pend = ""
+    return r
+}
+
+; Writes keyName = val into the apps\570 block (missing blocks are created).
+; "" = there is not even a Steam block, nowhere to write.
+VdfPut(txt, r, keyName, val) {
+    kv := '"' . keyName . '"`t`t"' . val . '"'
+    t4 := "`t`t`t`t", t5 := t4 . "`t", t6 := t5 . "`t"
+    if r["kPos"]
+        return SubStr(txt, 1, r["kPos"] - 1) . '"' . val . '"'
+             . SubStr(txt, r["kPos"] + r["kLen"])
+    if r["app"]
+        return SubStr(txt, 1, r["app"] - 1) . "`n" . t6 . kv . SubStr(txt, r["app"])
+    if r["apps"]
+        return SubStr(txt, 1, r["apps"] - 1) . "`n" . t5 . '"570"`n' . t5 . "{`n"
+             . t6 . kv . "`n" . t5 . "}" . SubStr(txt, r["apps"])
+    if r["steam"]
+        return SubStr(txt, 1, r["steam"] - 1) . "`n" . t4 . '"apps"`n' . t4 . "{`n"
+             . t5 . '"570"`n' . t5 . "{`n" . t6 . kv . "`n" . t5 . "}`n" . t4 . "}"
+             . SubStr(txt, r["steam"])
+    return ""
+}
+
+; Writes out in place of file. A copy is left next to it (.bak_dotaaccept, the first one
+; only). The new text is first put into a temporary file and read again: if it does not
+; parse or the value is wrong (check), the file stays as it was.
+VdfWriteSafe(file, out, root, key, check) {
+    bak := file . ".bak_dotaaccept", tmp := file . ".tmp_dotaaccept"
+    try {
+        if !FileExist(bak)
+            FileCopy file, bak
+        f := FileOpen(tmp, "w", "UTF-8-RAW")
+        f.Write(out)
+        f.Close()
+        chk := VdfScan(FileRead(tmp, "UTF-8"), root, key)
+        if !chk["ok"] || !check(chk["val"]) {
+            FileDelete tmp
+            return false
+        }
+        FileMove tmp, file, 1
+        return true
+    } catch {
+        try FileDelete tmp
+        return false
+    }
+}
+
+; Which flags of STEAM_FLAGS are missing from the options string (with a leading space).
+MissingFlags(cur) {
+    global STEAM_FLAGS
+    have := " " . StrLower(RegExReplace(cur, "\s+", " ")) . " "
+    add := ""
+    for f in STEAM_FLAGS
+        if !InStr(have, " " . StrLower(f) . " ")
+            add .= " " . f
+    return add
+}
+
+; 1 = added, 0 = everything is there already or the file is not what we expect, -1 = failed.
+PatchLaunchOptions(file, id) {
+    try txt := FileRead(file, "UTF-8")
+    catch
+        return -1
+    root := "userlocalconfigstore/software/valve/steam"
+    r := VdfScan(txt, root, "launchoptions")
+    if !r["ok"] || !r["apps"]
+        return 0                        ; account without a games list: do not guess
+    cur := r["kPos"] ? r["val"] : ""
+    add := MissingFlags(cur)
+    if add = ""
+        return 0
+    out := VdfPut(txt, r, "LaunchOptions", Trim(cur . add))
+    if out = "" || !VdfWriteSafe(file, out, root, "launchoptions", (v) => MissingFlags(v) = "")
+        return -1
+    Log("Steam: account …" . SubStr(id, -3) . " - added to the Dota 2 launch options: " . Trim(add))
+    return 1
+}
+
+; Steam Cloud for Dota is switched off by the key cloudenabled = 0 in
+; userdata\<id>\7\remote\sharedconfig.vdf (block apps\570); Steam overwrites the file of
+; the account it is running under, so only while Steam is closed. 1 = off (or already
+; was), -1 = failed.
+SetCloudOff(id) {
+    f := SteamDir() . "\userdata\" . id . "\7\remote\sharedconfig.vdf"
+    root := "userroamingconfigstore/software/valve/steam"
+    if !FileExist(f) {
+        try {
+            DirCreate SteamDir() . "\userdata\" . id . "\7\remote"
+            h := FileOpen(f, "w", "UTF-8-RAW")
+            h.Write('"UserRoamingConfigStore"`n{`n`t"Software"`n`t{`n`t`t"Valve"`n`t`t{`n'
+                    . '`t`t`t"Steam"`n`t`t`t{`n`t`t`t`t"apps"`n`t`t`t`t{`n`t`t`t`t`t"570"`n'
+                    . '`t`t`t`t`t{`n`t`t`t`t`t`t"cloudenabled"`t`t"0"`n`t`t`t`t`t}`n'
+                    . '`t`t`t`t}`n`t`t`t}`n`t`t}`n`t}`n}`n')
+            h.Close()
+            return 1
+        } catch
+            return -1
+    }
+    try txt := FileRead(f, "UTF-8")
+    catch
+        return -1
+    r := VdfScan(txt, root, "cloudenabled")
+    if !r["ok"]
+        return -1
+    if r["kPos"] && r["val"] = "0"
+        return 1
+    out := VdfPut(txt, r, "cloudenabled", "0")
+    if out = "" || !VdfWriteSafe(f, out, root, "cloudenabled", (v) => v = "0")
+        return -1
+    Log("Steam: Steam Cloud for Dota switched off for account …" . SubStr(id, -3))
+    return 1
+}
+
+; Every 5 minutes. seen: the file date of each account as of our last check; while
+; Steam has not changed the file we do not read it again. Files younger than a
+; minute are left alone: Steam may have just written it on leaving the account.
+FixSteamAccounts() {
+    global optSteamFix
+    static seen := Map()
+    SetTimer FixSteamAccounts, -300000
+    if !optSteamFix
         return
-    if InStr(o, "-condebug") {
-        HintReset()
+    try steam := StrReplace(RegRead("HKCU\Software\Valve\Steam", "SteamPath"), "/", "\")
+    catch
+        return
+    active := 0
+    if ProcessExist("steam.exe") {
+        try active := RegRead("HKCU\Software\Valve\Steam\ActiveProcess", "ActiveUser")
+        if !active
+            return                      ; Steam is still logging in: later
+    }
+    Loop Files steam . "\userdata\*", "D" {
+        id := A_LoopFileName
+        if !RegExMatch(id, "^[1-9]\d*$") || id = active
+            continue
+        f := A_LoopFilePath . "\config\localconfig.vdf"
+        if !FileExist(f)
+            continue
+        t := FileGetTime(f)
+        if (seen.Has(id) && seen[id] = t) || DateDiff(A_Now, t, "Seconds") < 60
+            continue
+        res := PatchLaunchOptions(f, id)
+        if res = -1
+            Log("Steam: could not fix the launch options of account …" . SubStr(id, -3)
+                . " (file left untouched)")
+        seen[id] := FileGetTime(f)
+    }
+}
+
+; ── writing the options into the account Steam is running under ────
+; Steam holds that file in memory and will overwrite it on exit, so the options can
+; only be written while Steam is closed. The script offers to close Steam itself
+; (steam.exe -shutdown is the standard way), write the options and start it again.
+; While Dota is running we do nothing: Steam would close it along with itself.
+SteamDir() {
+    try return StrReplace(RegRead("HKCU\Software\Valve\Steam", "SteamPath"), "/", "\")
+    return ""
+}
+
+; Who we write to: the active account, and if Steam is closed, the one whose file
+; changed last (SteamLaunchOptions picks it the same way).
+SteamTargetId() {
+    steam := SteamDir()
+    if steam = ""
+        return ""
+    user := 0
+    try user := RegRead("HKCU\Software\Valve\Steam\ActiveProcess", "ActiveUser")
+    if user
+        return String(user)
+    best := "", newest := 0
+    Loop Files steam . "\userdata\*", "D" {
+        f := A_LoopFilePath . "\config\localconfig.vdf"
+        if RegExMatch(A_LoopFileName, "^[1-9]\d*$") && FileExist(f)
+           && FileGetTime(f) > newest
+            newest := FileGetTime(f), best := A_LoopFileName
+    }
+    return best
+}
+
+FileHasFlags(file) {
+    try txt := FileRead(file, "UTF-8")
+    catch
+        return false
+    r := VdfScan(txt, "userlocalconfigstore/software/valve/steam", "launchoptions")
+    return r["ok"] && MissingFlags(r["val"]) = ""
+}
+
+DoSteamFix(profile := false) {
+    global optSteamFix, DOTA_EXE
+    static busy := false
+    if busy
+        return
+    steam := SteamDir()
+    if steam = "" || !FileExist(steam . "\steam.exe") {
+        MsgBox("Could not find Steam on this PC.", "Dota auto-accept", "Icon!")
         return
     }
-    Log("the Dota 2 launch options in Steam do not contain -condebug")
-    Hint(HINT_TEXT)
+    if ProcessExist(DOTA_EXE) {
+        MsgBox("Dota 2 is running. Close it and try again: Steam has to be closed, "
+               . "and it would close Dota along with itself.", "Dota auto-accept", "Icon!")
+        return
+    }
+    busy := true
+    target := SteamTargetId()
+    was := ProcessExist("steam.exe")
+    if was {
+        Log("Steam: closing it to write the launch options")
+        Run('"' . steam . '\steam.exe" -shutdown', , "Hide")
+        Loop 80 {
+            if !ProcessExist("steam.exe")
+                break
+            Sleep 500
+        }
+        if ProcessExist("steam.exe") {
+            busy := false
+            Log("Steam: did not close within 40 s - changed nothing")
+            MsgBox("Steam did not close within 40 seconds, I changed nothing. Close it "
+                   . "yourself (tray icon → Exit) and try again.", "Dota auto-accept", "Icon!")
+            return
+        }
+        Sleep 3000                      ; Steam is still finishing its files
+    }
+    f := target != "" ? steam . "\userdata\" . target . "\config\localconfig.vdf" : ""
+    res := f != "" && FileExist(f) ? PatchLaunchOptions(f, target) : -1
+    ok := res = 1 || (res != -1 && f != "" && FileHasFlags(f))
+    cloud := 0, nfiles := -1
+    if profile && target != "" {
+        cloud := SetCloudOff(target)
+        nfiles := ApplyProfile(target)
+        if nfiles >= 0
+            MarkKnown(target)
+        Log("Dota settings profile transferred: " . nfiles . " files, Steam Cloud "
+            . (cloud = 1 ? "switched off" : "could not be switched off"))
+    }
+    if optSteamFix
+        FixSteamAccounts()              ; Steam is closed: the other accounts too
+    if was
+        Run('"' . steam . '\steam.exe"')
+    busy := false
+    msg := ""
+    if profile {
+        msg .= nfiles >= 0
+            ? "Dota settings transferred (" . nfiles . " files); what was there before "
+              . "is saved in the bak_profile folder next to the script. "
+            : "Could not transfer the settings. "
+        msg .= cloud = 1
+            ? "Steam Cloud for Dota is switched off. "
+            : "Could not switch Steam Cloud off - do it yourself: Steam → Dota 2 → Properties → "
+              . "General → untick 'Keep game saves in the Steam Cloud for Dota 2'. "
+    }
+    msg .= ok ? "Launch options written." : "Could not write the launch options: add "
+             . "-condebug by hand (Steam → Dota 2 → Properties → Launch Options)."
+    Log("Steam: " . msg)
+    if ok && (!profile || (nfiles >= 0 && cloud = 1))
+        Hint(msg . (was ? " Steam is starting again." : ""), true)
+    else
+        MsgBox(msg . (was ? "`n`nSteam is starting again." : ""), "Dota auto-accept", "Icon!")
+}
+
+; ── Dota settings profile ──────────────────────────────────────────
+; "My settings": a copy of the Dota settings files (keys, interface, video, hero grid,
+; builds) from the source account. It lives in profile\ next to the script and refreshes
+; itself when Dota is closed under the source account. For a Steam account that is new
+; to the script, the script offers to set it up: transfer the profile, switch Steam Cloud
+; off for Dota and write the launch options. Only settings are copied (list below), not
+; statistics, friends, voice bans or anything else that belongs to the account itself.
+PROFILE_DIR := A_ScriptDir . "\profile"
+PROFILE_FILES := [
+    "local\cfg\machine_convars.vcfg", "local\cfg\user_convars_0_slot0.vcfg",
+    "local\cfg\user_keys_0_slot0.vcfg", "local\cfg\user_keys_0_slot1.vcfg",
+    "local\cfg\user_keys_0_slot2.vcfg", "local\cfg\user_keys_0_slot3.vcfg",
+    "local\cfg\video.txt", "remote\user_convars.vcfg", "remote\user_keys.vcfg",
+    "remote\cfg\hero_grid_config.json", "remote\cfg\herobuilds.cfg",
+    "remote\cfg\hero_facet_config.cfg", "remote\cfg\chat.cfg",
+    "remote\cfg\dotakeys_personal.lst", "remote\cfg\saved_sets.kv",
+    "remote\cfg\dismissed_help_tips.txt", "remote\scripts\control_groups.txt",
+    "remote\scripts\lobby_settings.txt", "remote\scripts\item_suggest_preference.txt",
+    "remote\scripts\clientstorage.txt"]
+
+DotaUserDir(id) {
+    return SteamDir() . "\userdata\" . id . "\570"
+}
+
+ProfileCount() {
+    global PROFILE_DIR, PROFILE_FILES
+    n := 0
+    for rel in PROFILE_FILES
+        if FileExist(PROFILE_DIR . "\" . rel)
+            n++
+    return n
+}
+
+; Copies the settings of account id into profile\. Returns the number of files.
+SaveProfile(id) {
+    global PROFILE_DIR, PROFILE_FILES, DOTA_INI
+    n := 0
+    for rel in PROFILE_FILES {
+        src := DotaUserDir(id) . "\" . rel
+        if !FileExist(src)
+            continue
+        dst := PROFILE_DIR . "\" . rel
+        try {
+            SplitPath dst, , &dir
+            if !DirExist(dir)
+                DirCreate dir
+            FileCopy src, dst, 1
+            n++
+        }
+    }
+    if n {
+        IniWrite id, DOTA_INI, "profile", "source"
+        IniWrite A_Now, DOTA_INI, "profile", "saved"
+    }
+    return n
+}
+
+; Puts the profile into account id. What was there goes to bak_profile\. Returns the
+; number of files or -1.
+ApplyProfile(id) {
+    global PROFILE_DIR, PROFILE_FILES
+    n := 0
+    bak := A_ScriptDir . "\bak_profile\" . id . "_" . FormatTime(, "yyyyMMdd-HHmmss")
+    for rel in PROFILE_FILES {
+        src := PROFILE_DIR . "\" . rel
+        if !FileExist(src)
+            continue
+        dst := DotaUserDir(id) . "\" . rel
+        try {
+            if FileExist(dst) {
+                SplitPath bak . "\" . rel, , &bdir
+                if !DirExist(bdir)
+                    DirCreate bdir
+                FileCopy dst, bak . "\" . rel, 1
+            }
+            SplitPath dst, , &dir
+            if !DirExist(dir)
+                DirCreate dir
+            FileCopy src, dst, 1
+            n++
+        } catch
+            return -1
+    }
+    return n
+}
+
+; Accounts the script already knows about (they are not "new"). On the first run we
+; record all that already lie in userdata.
+KnownInit() {
+    global DOTA_INI
+    if IniRead(DOTA_INI, "profile", "known_init", "") != ""
+        return
+    ids := ""
+    steam := SteamDir()
+    if steam != ""
+        Loop Files steam . "\userdata\*", "D"
+            if RegExMatch(A_LoopFileName, "^[1-9]\d*$")
+                ids .= (ids = "" ? "" : ",") . A_LoopFileName
+    IniWrite ids, DOTA_INI, "profile", "known"
+    IniWrite 1, DOTA_INI, "profile", "known_init"
+}
+
+IsKnown(id) {
+    global DOTA_INI
+    return InStr("," . IniRead(DOTA_INI, "profile", "known", "") . ",", "," . id . ",")
+}
+
+MarkKnown(id) {
+    global DOTA_INI
+    if IsKnown(id)
+        return
+    k := IniRead(DOTA_INI, "profile", "known", "")
+    IniWrite (k = "" ? id : k . "," . id), DOTA_INI, "profile", "known"
+}
+
+; Whether it makes sense to offer a settings transfer to account id: a profile is saved,
+; the account is new to the script and it is not the source itself.
+ProfileNeeded(id) {
+    global DOTA_INI
+    return id != "" && ProfileCount() > 0 && !IsKnown(id)
+           && id != IniRead(DOTA_INI, "profile", "source", "")
+}
+
+; After Dota closes: if we are logged in to the source account, refresh the profile
+; (Dota writes its settings on exit).
+ProfileAutoSave() {
+    global DOTA_INI, DOTA_EXE
+    src := IniRead(DOTA_INI, "profile", "source", "")
+    if src = "" || ProcessExist(DOTA_EXE)
+        return
+    user := 0
+    try user := RegRead("HKCU\Software\Valve\Steam\ActiveProcess", "ActiveUser")
+    if String(user) != src
+        return
+    Log("Dota settings profile updated: " . SaveProfile(src) . " files")
+}
+
+; Every 20 seconds: Steam moved to another account, so offer to set it up. At script
+; start the offer is scheduled by EarlyCheck.
+WatchAccount() {
+    global DOTA_EXE
+    static last := 0
+    user := 0
+    try user := RegRead("HKCU\Software\Valve\Steam\ActiveProcess", "ActiveUser")
+    if !user || user = last
+        return
+    first := !last
+    last := user
+    if !first && !ProcessExist(DOTA_EXE)
+        SetTimer OfferSteamFix, -12000
+}
+
+ProfileInfo() {
+    global DOTA_INI
+    n := ProfileCount()
+    if !n
+        return "No profile yet."
+    src := IniRead(DOTA_INI, "profile", "source", "")
+    t := IniRead(DOTA_INI, "profile", "saved", "")
+    return "Profile: " . n . " files" . (src != "" ? " from account …" . SubStr(src, -3) : "")
+           . (t != "" ? ", saved " . FormatTime(t, "dd.MM.yyyy HH:mm") : "") . "."
+}
+
+SaveProfileClick() {
+    global DOTA_EXE, sgProf
+    if ProcessExist(DOTA_EXE) {
+        MsgBox("Dota 2 is running, and it writes its settings on exit. Close it "
+               . "and press again.", "Dota auto-accept", "Icon!")
+        return
+    }
+    id := SteamTargetId()
+    n := id != "" ? SaveProfile(id) : 0
+    try sgProf.Text := ProfileInfo()
+    if n
+        MsgBox("Saved the Dota settings (" . n . " files) from account …" . SubStr(id, -3)
+               . ". From now on the profile updates itself when you close Dota under this "
+               . "account.", "Dota auto-accept", "Iconi")
+    else
+        MsgBox("Found no settings files for this account. Start Dota under it at least "
+               . "once and close it.", "Dota auto-accept", "Icon!")
+}
+
+ApplyProfileClick() {
+    global DOTA_INI
+    id := SteamTargetId()
+    if ProfileCount() = 0 {
+        MsgBox("No profile yet: first log in to your main account and press 'Save "
+               . "settings of this account'.", "Dota auto-accept", "Icon!")
+        return
+    }
+    if id = IniRead(DOTA_INI, "profile", "source", "") {
+        MsgBox("This is the account the profile was taken from: nothing to transfer to.",
+               "Dota auto-accept", "Icon!")
+        return
+    }
+    if MsgBox("My Dota settings will be written into the account you are logged in with (what "
+              . "is there now will be kept in the bak_profile folder). Steam will be closed and started "
+              . "again, and Steam Cloud for Dota will be switched off. Continue?", "Dota auto-accept",
+              "YesNo Icon?") = "Yes"
+        DoSteamFix(true)
+}
+
+; The offer window. Scheduled at script start and when Steam moves to another account;
+; shows nothing if there is nothing to do. "Do not ask again" is stored in the ini.
+OfferSteamFix() {
+    global ofg, ofgProf, ofgId, DOTA_INI, DOTA_EXE
+    static tries := 0
+    if ProcessExist(DOTA_EXE)
+        return                          ; Dota is already running: CheckLaunchOpts will say it
+    try {
+        if WinExist("ahk_id " . ofg.Hwnd)
+            return                      ; the window is already on screen
+    }
+    up := ProcessExist("steam.exe")
+    user := 0
+    if up {
+        try user := RegRead("HKCU\Software\Valve\Steam\ActiveProcess", "ActiveUser")
+        if !user {                      ; Steam is still logging in: wait
+            if ++tries < 12
+                SetTimer OfferSteamFix, -15000
+            return
+        }
+    }
+    o := SteamLaunchOptions()
+    needFlags := o != -1 && !InStr(o, "-condebug")
+    ofgId := SteamTargetId()
+    ofgProf := ProfileNeeded(ofgId)
+    if !needFlags && !ofgProf
+        return
+    if IniRead(DOTA_INI, "steam", "ask", "1") = "0" {
+        if needFlags
+            Hint(OptsText())
+        return
+    }
+    try ofg.Destroy()
+    ofg := Gui("+AlwaysOnTop -MaximizeBox", "Dota auto-accept")
+    ofg.MarginX := 16, ofg.MarginY := 14
+    if needFlags
+        ofg.Add("Text", "w440", "In Steam, for the account you are logged in with, the "
+            . "Dota 2 launch options do not contain -condebug, so the script cannot see matches.")
+    if ofgProf
+        ofg.Add("Text", "w440" . (needFlags ? " y+10" : ""), "This account is new to the script. I can "
+            . "transfer your Dota settings into it and switch Steam Cloud off for Dota so that "
+            . "they do not go to the cloud of this account.")
+    ofg.Add("Text", "w440 y+10", up
+        ? "For this, Steam will be closed and started again right away (about half a minute). "
+          . "Better close any open games."
+        : "Steam is not running right now, so I will do it at once, no restart needed.")
+    b := ofg.Add("Button", "w440 h34 y+14 Default", up ? "Do it and restart Steam" : "Do it")
+    b.OnEvent("Click", (*) => OfferAnswer(1))
+    b := ofg.Add("Button", "w214 h30 y+8", "Not now")
+    b.OnEvent("Click", (*) => OfferAnswer(2))
+    b := ofg.Add("Button", "w214 h30 x+12 yp", "Do not ask again")
+    b.OnEvent("Click", (*) => OfferAnswer(3))
+    ofg.OnEvent("Close", (*) => OfferAnswer(2))
+    ofg.Show()
+}
+
+AskSteamFix() {
+    if MsgBox("Steam will be closed and started again right away to write -condebug into "
+              . "the account you are logged in with. Continue?", "Dota auto-accept",
+              "YesNo Icon?") = "Yes"
+        DoSteamFix()
+}
+
+OfferAnswer(n) {
+    global ofg, ofgProf, ofgId, DOTA_INI
+    try ofg.Destroy()
+    if n = 1 {
+        DoSteamFix(ofgProf)
+        return
+    }
+    if n = 3 {
+        IniWrite 0, DOTA_INI, "steam", "ask"
+        MarkKnown(ofgId)
+    }
+    o := SteamLaunchOptions()
+    if o != -1 && !InStr(o, "-condebug")
+        Hint(OptsText())
 }
 
 ; ── ntfy notifications ─────────────────────────────────────────────
@@ -777,7 +1439,7 @@ LobbyScan() {
     Log("MATCH FOUND (by screen: lobby exists but no ready-up signal in the log)")
     ArmMatchAlert()
     if optMatch
-        TryAccept()
+        TryAccept("match", true)
 }
 
 NtfyCopy() {
@@ -929,13 +1591,14 @@ IndexOf(arr, v) {
 BuildSettings() {
     global sg, sgLV, sgLB, sgFilter, sgInfo, sgOrder, sgKeys, sgBuilding
     global optMatch, optInvite, optNtfy, optPick, optPickDelay, DOTA_LNK, HERO_NAME
+    global optSteamFix, sgProf
     sgOrder := ResolveHeroes()
     sgKeys := []
     sgBuilding := false
     sg := Gui("-MaximizeBox", "Dota auto-accept — settings")
     sg.MarginX := 14, sg.MarginY := 12
     sg.OnEvent("Close", (*) => CloseSettings())
-    tab := sg.Add("Tab3", "w650 h560", ["General", "Auto-pick"])
+    tab := sg.Add("Tab3", "w650 h560", ["General", "Auto-pick", "Steam accounts"])
     tab.UseTab(1)
     sg.Add("GroupBox", "x28 y48 w620 h130", "Auto-accept")
     c := sg.Add("Checkbox", "x48 y76 w580", "Auto-accept matches (the match found window)")
@@ -982,6 +1645,21 @@ BuildSettings() {
     b := sg.Add("Button", "x376 y504 w262 h30", "Save hero list")
     b.OnEvent("Click", (*) => SaveHeroes())
     sgInfo := sg.Add("Text", "x28 y510 w330 c808080", "")
+    tab.UseTab(3)
+    sg.Add("GroupBox", "x28 y48 w620 h168", "Launch options in Steam")
+    c := sg.Add("Checkbox", "x48 y76 w580", "Add the launch options (-condebug) to other Steam accounts")
+    c.Value := optSteamFix
+    c.OnEvent("Click", (ctl, *) => SetOpt("steamfix", ctl.Value))
+    sg.Add("Text", "x48 y106 w580 h50 c808080", "Every Steam account has its own launch options. Only accounts Steam is not running under right now are touched; a copy localconfig.vdf.bak_dotaaccept is left next to the file. List of flags: dota_accept.ini, section [steam], flags.")
+    b := sg.Add("Button", "x48 y166 w330 h30", "Add -condebug now (restarts Steam)")
+    b.OnEvent("Click", (*) => AskSteamFix())
+    sg.Add("GroupBox", "x28 y232 w620 h246", "My Dota settings")
+    sgProf := sg.Add("Text", "x48 y260 w580", ProfileInfo())
+    sg.Add("Text", "x48 y288 w580 h74 c808080", "The profile is a copy of your Dota settings (keys, interface, video, hero grid, builds) from the account you are logged in with. While you play under that account it refreshes itself when Dota closes. When Steam moves to an account that is new to the script, the script offers to transfer the profile into it and switch Steam Cloud off for Dota.")
+    b := sg.Add("Button", "x48 y376 w330 h30", "Save settings of this account")
+    b.OnEvent("Click", (*) => SaveProfileClick())
+    b := sg.Add("Button", "x48 y416 w330 h30", "Transfer the profile to this account (restarts Steam)")
+    b.OnEvent("Click", (*) => ApplyProfileClick())
     tab.UseTab()
     FillHeroLV()
     RefreshOrder()
@@ -1848,9 +2526,15 @@ ToggleOpt(which) {
 }
 
 SetOpt(which, val) {
-    global optMatch, optInvite, optNtfy, optPick, DOTA_INI
+    global optMatch, optInvite, optNtfy, optPick, optSteamFix, DOTA_INI
     v := val ? 1 : 0
-    if which = "ntfy" {
+    if which = "steamfix" {
+        optSteamFix := v
+        IniWrite v, DOTA_INI, "steam", "fix"
+        Log("launch options of other Steam accounts: " . (v ? "adding" : "leaving alone"))
+        if v
+            SetTimer FixSteamAccounts, -300
+    } else if which = "ntfy" {
         optNtfy := v
         IniWrite v, DOTA_INI, "options", "ntfy"
         Log("ntfy notifications: " . (v ? "on" : "off"))
@@ -1905,6 +2589,8 @@ Tick() {
         issues.Clear()
         dotaSince := A_TickCount
         Log(live ? "Dota started — armed" : "Dota closed — sleeping")
+        if !live
+            SetTimer ProfileAutoSave, -5000
         Status()
         SetTimer Tick, live ? DOTA_POLL : DOTA_IDLE
         if live
@@ -1923,6 +2609,7 @@ Tick() {
         clogPath := ClogFind()
         if clogPath != "" {
             try clogPos := FileGetSize(clogPath)
+            SeedLobbies(clogPath)
             clogOk := true
             lastGrow := A_TickCount
             DelIssue("nolog")
@@ -1998,10 +2685,13 @@ Tick() {
     _lob := LobbyId(_new)
     if _lob != "" && _lob != curLobby {
         curLobby := _lob
-        readyDone := false, readyTries := 0, lastTry := 0
-        readyFail := false
-        lobbyAt := A_TickCount, lobbyWatch := true, lobbyNext := 0
-        Log("new lobby " . _lob)
+        if !seenLobbies.Has(_lob) {
+            seenLobbies[_lob] := true
+            readyDone := false, readyTries := 0, lastTry := 0
+            readyFail := false
+            lobbyAt := A_TickCount, lobbyWatch := true, lobbyNext := 0
+            Log("new lobby " . _lob)
+        }
     }
     if InStr(_new, CLOG_READY) {
         ;        ; All candidates missed: try again after RETRY_MS: the window stays up
@@ -2159,7 +2849,7 @@ InvRetry() {
 
 ; what: "match" or "party". The only difference is which log line counts as the
 ; confirmation and which button is searched for.
-TryAccept(what := "match") {
+TryAccept(what := "match", learnedOnly := false) {
     global CLOG_MINE, CLOG_INVOK, CLOG_WAIT, CLOG_TRIES
     global readyDone, readyTries, invDone, invTried
     global holdTill, CLOG_SILENT, CLOG_HOLD, CLOG_READY, readyAt, lastTry
@@ -2177,6 +2867,16 @@ TryAccept(what := "match") {
     lastTry := A_TickCount
     cands := _wide ? FindAccept(true)
                    : PartyCands(_wx, _wy, _ww, _wh, invMissLogged ? 1 : 8)
+    if learnedOnly {
+        ; There is no signal from the log, the window was guessed from the screen: click only at
+        ; the remembered spot of the button, not at any green band (that is how five false
+        ; clicks on the post-match screen happened on 1.11).
+        _only := []
+        for e in cands
+            if e.Length >= 5
+                _only.Push(e)
+        cands := _only
+    }
     if !cands.Length {
         if _wide {
             Log(what . ": signal received but the button was not found on screen")
@@ -2191,6 +2891,7 @@ TryAccept(what := "match") {
     ;    ; A silent click on the right button once failed while a mouse click worked.
     ;    ; Suspicion: Dota was not in focus; note it in the log.
     _bg := WinActive(DOTA_WIN) ? "" : ", Dota not in focus"
+    _bg .= ", mouse idle for " . A_TimeIdlePhysical . " ms"
     for c in cands {
         if (_wide ? readyTries : invTried) >= CLOG_TRIES
             return false
@@ -2220,11 +2921,16 @@ TryAccept(what := "match") {
                 return false
             }
         }
+        ; The mouse is being moved right now: a silent click may not work at such a moment
+        ; (1.11: twice it did not, the mouse worked; HYPOTHESIS: Panorama keeps :hover by the
+        ; real cursor). We still try the silent one first, to see in the log whether it works,
+        ; but give the real click earlier and skip the second silent one (with hover).
+        _user := A_TimeIdlePhysical < 2000
         ClickSilent(c[1], c[2])
         t0 := A_TickCount
         _lim := CLOG_SILENT
         _hard := false
-        _slow := false                  ; second silent click, with hover
+        _slow := _user                  ; second silent click, with hover
         while A_TickCount - t0 < _lim {
             Sleep 120
             _ch := ClogNew()
@@ -2234,8 +2940,11 @@ TryAccept(what := "match") {
                 if _wide {
                     readyDone := true
                     holdTill := A_TickCount + CLOG_HOLD
-                    LearnSave((c[1] - _wx) / _ww, (c[2] - _wy) / _wh,
-                              c[3] / _ww)
+                    ; We remember only a spot near the center: the confirmation could also come from
+                    ; somebody else's click (you accepted yourself), and then the spot is random.
+                    if Abs((c[1] - _wx) / _ww - 0.5) <= 0.2
+                        LearnSave((c[1] - _wx) / _ww, (c[2] - _wy) / _wh,
+                                  c[3] / _ww)
                 } else
                     invDone := true
                 Log(Format("ACCEPTED {5} {7}: click {1},{2} (band {3} px, "
@@ -2255,9 +2964,9 @@ TryAccept(what := "match") {
                 ClickSilent(c[1], c[2], true)
             }
             ;            ; the silent click did not work: finish with a real click
-            if !_hard && A_TickCount - t0 >= CLOG_SILENT - 120 {
+            if !_hard && A_TickCount - t0 >= (_user ? 450 : CLOG_SILENT - 120) {
                 _hard := true
-                _how := "mouse"
+                _how := _user ? "with the mouse (the mouse was moving)" : "mouse"
                 _lim := CLOG_SILENT + CLOG_WAIT
                 MouseGetPos &ox, &oy
                 Click c[1] . " " . c[2]
@@ -2297,10 +3006,13 @@ FirstRun() {
 LoadPickTemplate()
 LoadHeroMap()
 NtfyInit()
+KnownInit()
 BuildTray()
 EarlyCheck()
 FirstRun()
 Log("script started")
 SetTimer Tick, 100
+SetTimer FixSteamAccounts, -6000
+SetTimer WatchAccount, 20000
 if A_Args.Length && A_Args[1] = "/settings"
     ShowSettings()
