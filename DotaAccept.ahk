@@ -24,6 +24,78 @@
 ;    to the script).
 ; ──────────────────────────────────────────────────────────────────────
 
+; ── interface language ───────────────────────────────────────────────
+; Everything a person sees (menus, windows, messages, the log) goes through
+; Tr("text"): the string in the source is the key, and its translation is looked
+; up in lang.tsv next to the script (columns: Russian, English, Ukrainian). The
+; language is chosen in the settings (ini: [options] lang = auto | ru | en | uk;
+; auto follows the Windows language: Russian or Ukrainian, anything else is
+; English). No file or no translation: the source text is shown, nothing breaks.
+SRC_LANG := "en"                         ; the language the strings in this file are written in
+LANGS := ["ru", "en", "uk"]              ; same order as the columns of lang.tsv
+LANG_ITEMS := ["Auto", "Русский", "English", "Українська"]   ; lang-names
+LANG_MAP := Map()
+LANG_CODE := SRC_LANG
+LANG_NOTE := ""
+InitLang()
+
+InitLang() {
+    global SRC_LANG, LANGS, LANG_MAP, LANG_CODE, LANG_NOTE
+    code := IniRead(A_ScriptDir . "\dota_accept.ini", "options", "lang", "auto")
+    if !IndexOf(LANGS, code)
+        code := WindowsLang()
+    LANG_CODE := code
+    if code = SRC_LANG
+        return
+    f := A_ScriptDir . "\lang.tsv"
+    if !FileExist(f) {
+        LANG_NOTE := "lang.tsv not found next to the script: texts stay in the source language"
+        return
+    }
+    src := IndexOf(LANGS, SRC_LANG), col := IndexOf(LANGS, code)
+    for ln in StrSplit(FileRead(f, "UTF-8"), "`n", "`r") {
+        if ln = "" || SubStr(ln, 1, 1) = "#"
+            continue
+        p := StrSplit(ln, "`t")
+        if p.Length < Max(src, col) || p[col] = ""
+            continue
+        k := LangUnesc(p[src])
+        if !LANG_MAP.Has(k)           ; the same text in two rows: the first one wins
+            LANG_MAP[k] := LangUnesc(p[col])
+    }
+}
+
+; Windows language: 0419 is Russian, 0422 is Ukrainian, anything else is English.
+WindowsLang() {
+    id := Integer("0x" . SubStr(A_Language, 3))
+    return id = 0x19 ? "ru" : id = 0x22 ? "uk" : "en"
+}
+
+Tr(s) {
+    global LANG_MAP
+    return LANG_MAP.Has(s) ? LANG_MAP[s] : s
+}
+
+; In lang.tsv a new line, a tab, a backslash and a space at the edge of a text
+; are written as \n \t \\ \s.
+LangUnesc(s) {
+    if !InStr(s, "\")
+        return s
+    out := "", i := 1, n := StrLen(s)
+    while i <= n {
+        c := SubStr(s, i, 1)
+        if c = "\" && i < n {
+            d := SubStr(s, i + 1, 1)
+            out .= d = "n" ? "`n" : d = "t" ? "`t" : d = "r" ? "`r" : d = "s" ? " " : d
+            i += 2
+        } else {
+            out .= c
+            i += 1
+        }
+    }
+    return out
+}
+
 DOTA_EXE := "dota2.exe"
 DOTA_WIN := "ahk_exe dota2.exe"
 DOTA_POLL := 200         ; poll interval while Dota is running, ms
@@ -149,16 +221,16 @@ sg := ""                 ; settings window
 sgLV := "", sgLB := "", sgFilter := "", sgInfo := ""
 sgOrder := [], sgKeys := [], sgBuilding := false
 
-M_SETTINGS := "Settings…"
-M_PICK := "Auto-pick hero"
-M_NTFY := "Phone notifications (ntfy)"
-M_NTFYCOPY := "Copy ntfy topic"
-M_NTFYTEST := "Send test notification"
-M_MATCH := "Auto-accept matches"
-M_INV := "Auto-accept party invites"
-M_PAUSE := "Pause  (Ctrl+Alt+P)"
-M_RUN := "Start with Windows"
-M_LOG := "Open log"
+M_SETTINGS := Tr("Settings…")
+M_PICK := Tr("Auto-pick hero")
+M_NTFY := Tr("Phone notifications (ntfy)")
+M_NTFYCOPY := Tr("Copy ntfy topic")
+M_NTFYTEST := Tr("Send test notification")
+M_MATCH := Tr("Auto-accept matches")
+M_INV := Tr("Auto-accept party invites")
+M_PAUSE := Tr("Pause  (Ctrl+Alt+P)")
+M_RUN := Tr("Start with Windows")
+M_LOG := Tr("Open log")
 
 LearnLoad()
 
@@ -364,7 +436,7 @@ FindAccept(wide := true) {
 ; If the accept window is recognised but there is no green, write the whole grid
 ; to the log. These rows show where the button really is. Once per window,
 ; otherwise the log would be flooded.
-DumpColumn(why := "accept window seen, green button not found") {
+DumpColumn(why := Tr("accept window seen, green button not found")) {
     global DOTA_WIN
     ;    A grid across the middle of the window rather than one column, so the button
     ;    can be told apart from the panels.
@@ -382,7 +454,7 @@ DumpColumn(why := "accept window seen, green button not found") {
             y += Round(wh * 0.025)
         }
     }
-    Log(why . ". grid:" . s)
+    Log(why . Tr(". grid:") . s)
 }
 
 ; ── Dota's console.log ─────────────────────────────────────────────
@@ -603,9 +675,9 @@ Hint(text, loud := false) {
     try TrayTip(text, "Dota auto-accept", loud ? "Icon!" : "Iconi Mute")
 }
 
-HINT_TEXT := "Dota 2 was started without the -condebug launch option, so the script cannot see matches. "
-           . "In Steam: Dota 2 → Properties → Launch Options: add -condebug "
-           . "and restart Dota."
+HINT_TEXT := Tr("Dota 2 was started without the -condebug launch option, so the script cannot see matches. ")
+           . Tr("In Steam: Dota 2 → Properties → Launch Options: add -condebug ")
+           . Tr("and restart Dota.")
 
 ; What exactly is wrong: Steam has no such option for this account (every Steam
 ; account has its own launch options), or it is set but Dota was started around
@@ -616,12 +688,12 @@ OptsText() {
     if o = -1
         return HINT_TEXT
     if InStr(o, "-condebug")
-        return "Dota 2 was started without -condebug although it is set in Steam: it was not started "
-             . "with the Play button (or it restarted itself). Close Dota and "
-             . "start it again through Steam."
-    return "Dota 2 was started without -condebug, so the script cannot see matches. In Steam, for "
-         . "this account the option is not set: Dota 2 → Properties → Launch "
-         . "Options → -condebug."
+        return Tr("Dota 2 was started without -condebug although it is set in Steam: it was not started ")
+             . Tr("with the Play button (or it restarted itself). Close Dota and ")
+             . Tr("start it again through Steam.")
+    return Tr("Dota 2 was started without -condebug, so the script cannot see matches. In Steam, for ")
+         . Tr("this account the option is not set: Dota 2 → Properties → Launch ")
+         . Tr("Options → -condebug.")
 }
 
 ; While Dota runs without -condebug, remind every 10 minutes.
@@ -654,8 +726,8 @@ CheckLaunchOpts() {
         SetTimer RemindOpts, 0
         return
     }
-    AddIssue("opts", "Dota started without -condebug")
-    Log("Dota was started without -condebug: the script cannot see matches")
+    AddIssue("opts", Tr("Dota started without -condebug"))
+    Log(Tr("Dota was started without -condebug: the script cannot see matches"))
     Hint(OptsText(), true)
     SetTimer RemindOpts, 600000
 }
@@ -711,7 +783,7 @@ EarlyCheck() {
         return                          ; already running: Tick checks the process
     o := SteamLaunchOptions()
     if o != -1 && !InStr(o, "-condebug")
-        Log("the Dota 2 launch options in Steam do not contain -condebug")
+        Log(Tr("the Dota 2 launch options in Steam do not contain -condebug"))
     SetTimer OfferSteamFix, -8000       ; it decides by itself whether there is anything to offer
 }
 
@@ -860,7 +932,7 @@ PatchLaunchOptions(file, id) {
     out := VdfPut(txt, r, "LaunchOptions", Trim(cur . add))
     if out = "" || !VdfWriteSafe(file, out, root, "launchoptions", (v) => MissingFlags(v) = "")
         return -1
-    Log("Steam: account …" . SubStr(id, -3) . " - added to the Dota 2 launch options: " . Trim(add))
+    Log(Tr("Steam: account …") . SubStr(id, -3) . Tr(" - added to the Dota 2 launch options: ") . Trim(add))
     return 1
 }
 
@@ -895,7 +967,7 @@ SetCloudOff(id) {
     out := VdfPut(txt, r, "cloudenabled", "0")
     if out = "" || !VdfWriteSafe(f, out, root, "cloudenabled", (v) => v = "0")
         return -1
-    Log("Steam: Steam Cloud for Dota switched off for account …" . SubStr(id, -3))
+    Log(Tr("Steam: Steam Cloud for Dota switched off for account …") . SubStr(id, -3))
     return 1
 }
 
@@ -929,8 +1001,8 @@ FixSteamAccounts() {
             continue
         res := PatchLaunchOptions(f, id)
         if res = -1
-            Log("Steam: could not fix the launch options of account …" . SubStr(id, -3)
-                . " (file left untouched)")
+            Log(Tr("Steam: could not fix the launch options of account …") . SubStr(id, -3)
+                . Tr(" (file left untouched)"))
         seen[id] := FileGetTime(f)
     }
 }
@@ -980,19 +1052,19 @@ DoSteamFix(profile := false) {
         return
     steam := SteamDir()
     if steam = "" || !FileExist(steam . "\steam.exe") {
-        MsgBox("Could not find Steam on this PC.", "Dota auto-accept", "Icon!")
+        MsgBox(Tr("Could not find Steam on this PC."), "Dota auto-accept", "Icon!")
         return
     }
     if ProcessExist(DOTA_EXE) {
-        MsgBox("Dota 2 is running. Close it and try again: Steam has to be closed, "
-               . "and it would close Dota along with itself.", "Dota auto-accept", "Icon!")
+        MsgBox(Tr("Dota 2 is running. Close it and try again: Steam has to be closed, ")
+               . Tr("and it would close Dota along with itself."), "Dota auto-accept", "Icon!")
         return
     }
     busy := true
     target := SteamTargetId()
     was := ProcessExist("steam.exe")
     if was {
-        Log("Steam: closing it to write the launch options")
+        Log(Tr("Steam: closing it to write the launch options"))
         Run('"' . steam . '\steam.exe" -shutdown', , "Hide")
         Loop 80 {
             if !ProcessExist("steam.exe")
@@ -1001,9 +1073,9 @@ DoSteamFix(profile := false) {
         }
         if ProcessExist("steam.exe") {
             busy := false
-            Log("Steam: did not close within 40 s - changed nothing")
-            MsgBox("Steam did not close within 40 seconds, I changed nothing. Close it "
-                   . "yourself (tray icon → Exit) and try again.", "Dota auto-accept", "Icon!")
+            Log(Tr("Steam: did not close within 40 s - changed nothing"))
+            MsgBox(Tr("Steam did not close within 40 seconds, I changed nothing. Close it ")
+                   . Tr("yourself (tray icon → Exit) and try again."), "Dota auto-accept", "Icon!")
             return
         }
         Sleep 3000                      ; Steam is still finishing its files
@@ -1017,8 +1089,8 @@ DoSteamFix(profile := false) {
         nfiles := ApplyProfile(target)
         if nfiles >= 0
             MarkKnown(target)
-        Log("Dota settings profile transferred: " . nfiles . " files, Steam Cloud "
-            . (cloud = 1 ? "switched off" : "could not be switched off"))
+        Log(Tr("Dota settings profile transferred: ") . nfiles . Tr(" files, Steam Cloud ")
+            . (cloud = 1 ? Tr("off") : Tr("could not be switched off")))
     }
     if optSteamFix
         FixSteamAccounts()              ; Steam is closed: the other accounts too
@@ -1028,21 +1100,21 @@ DoSteamFix(profile := false) {
     msg := ""
     if profile {
         msg .= nfiles >= 0
-            ? "Dota settings transferred (" . nfiles . " files); what was there before "
-              . "is saved in the bak_profile folder next to the script. "
-            : "Could not transfer the settings. "
+            ? Tr("Dota settings transferred (") . nfiles . Tr(" files); what was there before ")
+              . Tr("is saved in the bak_profile folder next to the script. ")
+            : Tr("Could not transfer the settings. ")
         msg .= cloud = 1
-            ? "Steam Cloud for Dota is switched off. "
-            : "Could not switch Steam Cloud off - do it yourself: Steam → Dota 2 → Properties → "
-              . "General → untick 'Keep game saves in the Steam Cloud for Dota 2'. "
+            ? Tr("Steam Cloud for Dota is switched off. ")
+            : Tr("Could not switch Steam Cloud off - do it yourself: Steam → Dota 2 → Properties → ")
+              . Tr("General → untick 'Keep game saves in the Steam Cloud for Dota 2'. ")
     }
-    msg .= ok ? "Launch options written." : "Could not write the launch options: add "
-             . "-condebug by hand (Steam → Dota 2 → Properties → Launch Options)."
+    msg .= ok ? Tr("Launch options written.") : Tr("Could not write the launch options: add ")
+             . Tr("-condebug by hand (Steam → Dota 2 → Properties → Launch Options).")
     Log("Steam: " . msg)
     if ok && (!profile || (nfiles >= 0 && cloud = 1))
-        Hint(msg . (was ? " Steam is starting again." : ""), true)
+        Hint(msg . (was ? Tr(" Steam is starting again.") : ""), true)
     else
-        MsgBox(msg . (was ? "`n`nSteam is starting again." : ""), "Dota auto-accept", "Icon!")
+        MsgBox(msg . (was ? Tr("`n`nSteam is starting again.") : ""), "Dota auto-accept", "Icon!")
 }
 
 ; ── Dota settings profile ──────────────────────────────────────────
@@ -1179,7 +1251,7 @@ ProfileAutoSave() {
     try user := RegRead("HKCU\Software\Valve\Steam\ActiveProcess", "ActiveUser")
     if String(user) != src
         return
-    Log("Dota settings profile updated: " . SaveProfile(src) . " files")
+    Log(Tr("Dota settings profile updated: ") . SaveProfile(src) . Tr(" files"))
 }
 
 ; Every 20 seconds: Steam moved to another account, so offer to set it up. At script
@@ -1201,48 +1273,48 @@ ProfileInfo() {
     global DOTA_INI
     n := ProfileCount()
     if !n
-        return "No profile yet."
+        return Tr("No profile yet.")
     src := IniRead(DOTA_INI, "profile", "source", "")
     t := IniRead(DOTA_INI, "profile", "saved", "")
-    return "Profile: " . n . " files" . (src != "" ? " from account …" . SubStr(src, -3) : "")
-           . (t != "" ? ", saved " . FormatTime(t, "dd.MM.yyyy HH:mm") : "") . "."
+    return Tr("Profile: ") . n . Tr(" files") . (src != "" ? Tr(" from account …") . SubStr(src, -3) : "")
+           . (t != "" ? Tr(", saved ") . FormatTime(t, "dd.MM.yyyy HH:mm") : "") . "."
 }
 
 SaveProfileClick() {
     global DOTA_EXE, sgProf
     if ProcessExist(DOTA_EXE) {
-        MsgBox("Dota 2 is running, and it writes its settings on exit. Close it "
-               . "and press again.", "Dota auto-accept", "Icon!")
+        MsgBox(Tr("Dota 2 is running, and it writes its settings on exit. Close it ")
+               . Tr("and press again."), "Dota auto-accept", "Icon!")
         return
     }
     id := SteamTargetId()
     n := id != "" ? SaveProfile(id) : 0
     try sgProf.Text := ProfileInfo()
     if n
-        MsgBox("Saved the Dota settings (" . n . " files) from account …" . SubStr(id, -3)
-               . ". From now on the profile updates itself when you close Dota under this "
-               . "account.", "Dota auto-accept", "Iconi")
+        MsgBox(Tr("Saved the Dota settings (") . n . Tr(" files) from account …") . SubStr(id, -3)
+               . Tr(". From now on the profile updates itself when you close Dota under this ")
+               . Tr("account."), "Dota auto-accept", "Iconi")
     else
-        MsgBox("Found no settings files for this account. Start Dota under it at least "
-               . "once and close it.", "Dota auto-accept", "Icon!")
+        MsgBox(Tr("Found no settings files for this account. Start Dota under it at least ")
+               . Tr("once and close it."), "Dota auto-accept", "Icon!")
 }
 
 ApplyProfileClick() {
     global DOTA_INI
     id := SteamTargetId()
     if ProfileCount() = 0 {
-        MsgBox("No profile yet: first log in to your main account and press 'Save "
-               . "settings of this account'.", "Dota auto-accept", "Icon!")
+        MsgBox(Tr("No profile yet: first log in to your main account and press 'Save ")
+               . Tr("settings of this account'."), "Dota auto-accept", "Icon!")
         return
     }
     if id = IniRead(DOTA_INI, "profile", "source", "") {
-        MsgBox("This is the account the profile was taken from: nothing to transfer to.",
+        MsgBox(Tr("This is the account the profile was taken from: nothing to transfer to."),
                "Dota auto-accept", "Icon!")
         return
     }
-    if MsgBox("My Dota settings will be written into the account you are logged in with (what "
-              . "is there now will be kept in the bak_profile folder). Steam will be closed and started "
-              . "again, and Steam Cloud for Dota will be switched off. Continue?", "Dota auto-accept",
+    if MsgBox(Tr("My Dota settings will be written into the account you are logged in with (what ")
+              . Tr("is there now will be kept in the bak_profile folder). Steam will be closed and started ")
+              . Tr("again, and Steam Cloud for Dota will be switched off. Continue?"), "Dota auto-accept",
               "YesNo Icon?") = "Yes"
         DoSteamFix(true)
 }
@@ -1283,29 +1355,29 @@ OfferSteamFix() {
     ofg := Gui("+AlwaysOnTop -MaximizeBox", "Dota auto-accept")
     ofg.MarginX := 16, ofg.MarginY := 14
     if needFlags
-        ofg.Add("Text", "w440", "In Steam, for the account you are logged in with, the "
-            . "Dota 2 launch options do not contain -condebug, so the script cannot see matches.")
+        ofg.Add("Text", "w440", Tr("In Steam, for the account you are logged in with, the ")
+            . Tr("Dota 2 launch options do not contain -condebug, so the script cannot see matches."))
     if ofgProf
-        ofg.Add("Text", "w440" . (needFlags ? " y+10" : ""), "This account is new to the script. I can "
-            . "transfer your Dota settings into it and switch Steam Cloud off for Dota so that "
-            . "they do not go to the cloud of this account.")
+        ofg.Add("Text", "w440" . (needFlags ? " y+10" : ""), Tr("This account is new to the script. I can ")
+            . Tr("transfer your Dota settings into it and switch Steam Cloud off for Dota so that ")
+            . Tr("they do not go to the cloud of this account."))
     ofg.Add("Text", "w440 y+10", up
-        ? "For this, Steam will be closed and started again right away (about half a minute). "
-          . "Better close any open games."
-        : "Steam is not running right now, so I will do it at once, no restart needed.")
-    b := ofg.Add("Button", "w440 h34 y+14 Default", up ? "Do it and restart Steam" : "Do it")
+        ? Tr("For this, Steam will be closed and started again right away (about half a minute). ")
+          . Tr("Better close any open games.")
+        : Tr("Steam is not running right now, so I will do it at once, no restart needed."))
+    b := ofg.Add("Button", "w440 h34 y+14 Default", up ? Tr("Do it and restart Steam") : Tr("Do it"))
     b.OnEvent("Click", (*) => OfferAnswer(1))
-    b := ofg.Add("Button", "w214 h30 y+8", "Not now")
+    b := ofg.Add("Button", "w214 h30 y+8", Tr("Not now"))
     b.OnEvent("Click", (*) => OfferAnswer(2))
-    b := ofg.Add("Button", "w214 h30 x+12 yp", "Do not ask again")
+    b := ofg.Add("Button", "w214 h30 x+12 yp", Tr("Do not ask again"))
     b.OnEvent("Click", (*) => OfferAnswer(3))
     ofg.OnEvent("Close", (*) => OfferAnswer(2))
     ofg.Show()
 }
 
 AskSteamFix() {
-    if MsgBox("Steam will be closed and started again right away to write -condebug into "
-              . "the account you are logged in with. Continue?", "Dota auto-accept",
+    if MsgBox(Tr("Steam will be closed and started again right away to write -condebug into ")
+              . Tr("the account you are logged in with. Continue?"), "Dota auto-accept",
               "YesNo Icon?") = "Yes"
         DoSteamFix()
 }
@@ -1341,7 +1413,7 @@ NtfyInit() {
         t .= Format("{:02x}", NumGet(buf, A_Index - 1, "UChar"))
     ntfyTopic := t
     IniWrite ntfyTopic, DOTA_INI, "ntfy", "topic"
-    Log("ntfy: topic created (stored in dota_accept.ini, section [ntfy])")
+    Log(Tr("ntfy: topic created (stored in dota_accept.ini, section [ntfy])"))
 }
 
 ; Sending does not block the tick: the request is asynchronous, we check the
@@ -1364,7 +1436,7 @@ Ntfy(text, prio := "default", tags := "") {
         ntfyJobs.Push([w, text])
         SetTimer NtfyReap, -4000
     } catch as e {
-        Log("ntfy: send failed — " . e.Message)
+        Log(Tr("ntfy: send failed — ") . e.Message)
     }
 }
 
@@ -1375,11 +1447,11 @@ NtfyReap() {
     for j in jobs {
         try {
             if !j[1].WaitForResponse(0)
-                Log("ntfy: no server response for [" . j[2] . "]")
+                Log(Tr("ntfy: no server response for [") . j[2] . Tr("]"))
             else if j[1].Status != 200
-                Log("ntfy: server answered " . j[1].Status . " for [" . j[2] . "]")
+                Log(Tr("ntfy: server answered ") . j[1].Status . Tr(" for [") . j[2] . Tr("]"))
         } catch as e {
-            Log("ntfy: send error for [" . j[2] . "] — " . e.Message)
+            Log(Tr("ntfy: send error for [") . j[2] . Tr("] — ") . e.Message)
         }
     }
 }
@@ -1392,8 +1464,8 @@ NtfyMatchFail() {
     if readyDone
         return                          ; already accepted by now
     readyFail := true
-    Log("ntfy: not accepted within " . Round(NTFY_FAIL_MS / 1000) . " s - alert")
-    Ntfy("Match found, auto-accept did not work — accept it yourself!", "high",
+    Log(Tr("ntfy: not accepted within ") . Round(NTFY_FAIL_MS / 1000) . Tr(" s - alert"))
+    Ntfy(Tr("Match found, auto-accept did not work — accept it yourself!"), "high",
          "rotating_light")
 }
 
@@ -1408,7 +1480,7 @@ ArmMatchAlert() {
         SetTimer NtfyMatchFail, -NTFY_FAIL_MS
     else {
         readyFail := true
-        Ntfy("Match found, auto-accept is off — accept it yourself!", "high",
+        Ntfy(Tr("Match found, auto-accept is off — accept it yourself!"), "high",
              "rotating_light")
     }
 }
@@ -1436,26 +1508,26 @@ LobbyScan() {
         return                          ; no button at a remembered spot
     lobbyWatch := false
     readyAt := A_TickCount
-    Log("MATCH FOUND (by screen: lobby exists but no ready-up signal in the log)")
+    Log(Tr("MATCH FOUND (by screen: lobby exists but no ready-up signal in the log)"))
     ArmMatchAlert()
     if optMatch
-        TryAccept("match", true)
+        TryAccept(Tr("match"), true)
 }
 
 NtfyCopy() {
     global ntfyTopic
     if ntfyTopic = ""
-        return Note("No topic yet", 2000, true)
+        return Note(Tr("No topic yet"), 2000, true)
     A_Clipboard := ntfyTopic
-    Note("ntfy topic copied to the clipboard.`nIn the ntfy app: tap + and paste.", 5000, true)
+    Note(Tr("ntfy topic copied to the clipboard.`nIn the ntfy app: tap + and paste."), 5000, true)
 }
 
 NtfyTest() {
     global optNtfy
     if !optNtfy
-        return Note("Notifications are off", 2000, true)
-    Ntfy("Connection check: notifications from your PC work", "high", "white_check_mark")
-    Note("Test notification sent", 2000, true)
+        return Note(Tr("Notifications are off"), 2000, true)
+    Ntfy(Tr("Connection check: notifications from your PC work"), "high", "white_check_mark")
+    Note(Tr("Test notification sent"), 2000, true)
 }
 
 
@@ -1521,7 +1593,7 @@ PickEvents(txt) {
         baseSat.Clear(), heroWant := []
         stageAt := A_TickCount, pickNote := ""
         stageUntil := A_TickCount + 120000
-        Log("hero selection started; picking in " . Round(optPickDelay / 1000) . " s")
+        Log(Tr("hero selection started; picking in ") . Round(optPickDelay / 1000) . Tr(" s"))
         PickShot("_0_start")
         SetTimer DoPick, -optPickDelay
         SetTimer PoolWatch, 1500
@@ -1530,7 +1602,7 @@ PickEvents(txt) {
         inStage := false
         SetTimer DoPick, 0
         SetTimer PoolWatch, 0
-        Log("hero selection stage ended" . (picked ? "" : " (no pick was made)"))
+        Log(Tr("hero selection stage ended") . (picked ? "" : Tr(" (no pick was made)")))
     }
 }
 
@@ -1595,46 +1667,49 @@ BuildSettings() {
     sgOrder := ResolveHeroes()
     sgKeys := []
     sgBuilding := false
-    sg := Gui("-MaximizeBox", "Dota auto-accept — settings")
+    sg := Gui("-MaximizeBox", Tr("Dota auto-accept — settings"))
     sg.MarginX := 14, sg.MarginY := 12
     sg.OnEvent("Close", (*) => CloseSettings())
-    tab := sg.Add("Tab3", "w650 h560", ["General", "Auto-pick", "Steam accounts"])
+    tab := sg.Add("Tab3", "w650 h560", [Tr("General"), Tr("Auto-pick"), Tr("Steam accounts")])
     tab.UseTab(1)
-    sg.Add("GroupBox", "x28 y48 w620 h130", "Auto-accept")
-    c := sg.Add("Checkbox", "x48 y76 w580", "Auto-accept matches (the match found window)")
+    sg.Add("GroupBox", "x28 y48 w620 h130", Tr("Auto-accept"))
+    c := sg.Add("Checkbox", "x48 y76 w580", Tr("Auto-accept matches (the match found window)"))
     c.Value := optMatch
     c.OnEvent("Click", (ctl, *) => SetOpt("match", ctl.Value))
-    c := sg.Add("Checkbox", "x48 y106 w580", "Auto-accept party invites")
+    c := sg.Add("Checkbox", "x48 y106 w580", Tr("Auto-accept party invites"))
     c.Value := optInvite
     c.OnEvent("Click", (ctl, *) => SetOpt("invite", ctl.Value))
-    c := sg.Add("Checkbox", "x48 y136 w580", "Start with Windows")
+    c := sg.Add("Checkbox", "x48 y136 w580", Tr("Start with Windows"))
     c.Value := FileExist(DOTA_LNK) ? 1 : 0
     c.OnEvent("Click", (*) => StartupToggle())
-    sg.Add("GroupBox", "x28 y190 w620 h150", "Phone notifications (ntfy)")
-    c := sg.Add("Checkbox", "x48 y218 w580", "Send: match found and accepted / auto-accept did not work")
+    sg.Add("GroupBox", "x28 y190 w620 h150", Tr("Phone notifications (ntfy)"))
+    c := sg.Add("Checkbox", "x48 y218 w580", Tr("Send: match found and accepted / auto-accept did not work"))
     c.Value := optNtfy
     c.OnEvent("Click", (ctl, *) => SetOpt("ntfy", ctl.Value))
-    b := sg.Add("Button", "x48 y258 w210 h30", "Copy ntfy topic")
+    b := sg.Add("Button", "x48 y258 w210 h30", Tr("Copy ntfy topic"))
     b.OnEvent("Click", (*) => NtfyCopy())
-    b := sg.Add("Button", "x268 y258 w210 h30", "Send test notification")
+    b := sg.Add("Button", "x268 y258 w210 h30", Tr("Send test notification"))
     b.OnEvent("Click", (*) => NtfyTest())
-    sg.Add("Text", "x48 y300 w580 c808080", "The topic works like the channel password: it is stored in dota_accept.ini and never logged.")
-    b := sg.Add("Button", "x28 y360 w160 h30", "Open log")
+    sg.Add("Text", "x48 y300 w580 c808080", Tr("The topic works like the channel password: it is stored in dota_accept.ini and never logged."))
+    b := sg.Add("Button", "x28 y360 w160 h30", Tr("Open log"))
     b.OnEvent("Click", (*) => OpenLog())
+    sg.Add("Text", "x28 y418 w170", "Language / Язык / Мова:")   ; lang-names
+    dd := sg.Add("DropDownList", "x200 y414 w180 Choose" . LangChoice(), LANG_ITEMS)
+    dd.OnEvent("Change", (ctl, *) => SetLang(ctl.Value))
     tab.UseTab(2)
-    c := sg.Add("Checkbox", "x28 y48 w300", "Enable hero auto-pick")
+    c := sg.Add("Checkbox", "x28 y48 w300", Tr("Enable hero auto-pick"))
     c.Value := optPick
     c.OnEvent("Click", (ctl, *) => SetOpt("pick", ctl.Value))
-    sg.Add("Text", "x340 y50 w134", "Pick after (sec):")
+    sg.Add("Text", "x340 y50 w134", Tr("Pick after (sec):"))
     ed := sg.Add("Edit", "x478 y46 w56 Number", Round(optPickDelay / 1000))
     ed.OnEvent("Change", (ctl, *) => SetPickDelay(ctl.Value))
-    sg.Add("Text", "x28 y82 w610 h34", "Attributes grid: tick the heroes; the order in the right-hand list is the priority (the first available one is taken). MY HEROES strip (Custom Layout): no list needed.")
-    sg.Add("Text", "x28 y124 w60", "Search:")
+    sg.Add("Text", "x28 y82 w610 h34", Tr("Attributes grid: tick the heroes; the order in the right-hand list is the priority (the first available one is taken). MY HEROES strip (Custom Layout): no list needed."))
+    sg.Add("Text", "x28 y124 w60", Tr("Search:"))
     sgFilter := sg.Add("Edit", "x88 y120 w270")
     sgFilter.OnEvent("Change", (*) => FillHeroLV())
-    sgLV := sg.Add("ListView", "x28 y154 w330 h340 Checked -Multi NoSortHdr", ["Hero", "Attribute"])
+    sgLV := sg.Add("ListView", "x28 y154 w330 h340 Checked -Multi NoSortHdr", [Tr("Hero"), Tr("Attribute")])
     sgLV.OnEvent("ItemCheck", OnHeroCheck)
-    sg.Add("Text", "x376 y124 w200", "Pick order:")
+    sg.Add("Text", "x376 y124 w200", Tr("Pick order:"))
     sgLB := sg.Add("ListBox", "x376 y154 w210 h340")
     b := sg.Add("Button", "x594 y154 w44 h34", "▲")
     b.OnEvent("Click", (*) => MoveHero(-1))
@@ -1642,28 +1717,46 @@ BuildSettings() {
     b.OnEvent("Click", (*) => MoveHero(1))
     b := sg.Add("Button", "x594 y234 w44 h34", "✕")
     b.OnEvent("Click", (*) => RemoveHero())
-    b := sg.Add("Button", "x376 y504 w262 h30", "Save hero list")
+    b := sg.Add("Button", "x376 y504 w262 h30", Tr("Save hero list"))
     b.OnEvent("Click", (*) => SaveHeroes())
     sgInfo := sg.Add("Text", "x28 y510 w330 c808080", "")
     tab.UseTab(3)
-    sg.Add("GroupBox", "x28 y48 w620 h168", "Launch options in Steam")
-    c := sg.Add("Checkbox", "x48 y76 w580", "Add the launch options (-condebug) to other Steam accounts")
+    sg.Add("GroupBox", "x28 y48 w620 h168", Tr("Launch options in Steam"))
+    c := sg.Add("Checkbox", "x48 y76 w580", Tr("Add the launch options (-condebug) to other Steam accounts"))
     c.Value := optSteamFix
     c.OnEvent("Click", (ctl, *) => SetOpt("steamfix", ctl.Value))
-    sg.Add("Text", "x48 y106 w580 h50 c808080", "Every Steam account has its own launch options. Only accounts Steam is not running under right now are touched; a copy localconfig.vdf.bak_dotaaccept is left next to the file. List of flags: dota_accept.ini, section [steam], flags.")
-    b := sg.Add("Button", "x48 y166 w330 h30", "Add -condebug now (restarts Steam)")
+    sg.Add("Text", "x48 y106 w580 h50 c808080", Tr("Every Steam account has its own launch options. Only accounts Steam is not running under right now are touched; a copy localconfig.vdf.bak_dotaaccept is left next to the file. List of flags: dota_accept.ini, section [steam], flags."))
+    b := sg.Add("Button", "x48 y166 w330 h30", Tr("Add -condebug now (restarts Steam)"))
     b.OnEvent("Click", (*) => AskSteamFix())
-    sg.Add("GroupBox", "x28 y232 w620 h246", "My Dota settings")
+    sg.Add("GroupBox", "x28 y232 w620 h246", Tr("My Dota settings"))
     sgProf := sg.Add("Text", "x48 y260 w580", ProfileInfo())
-    sg.Add("Text", "x48 y288 w580 h74 c808080", "The profile is a copy of your Dota settings (keys, interface, video, hero grid, builds) from the account you are logged in with. While you play under that account it refreshes itself when Dota closes. When Steam moves to an account that is new to the script, the script offers to transfer the profile into it and switch Steam Cloud off for Dota.")
-    b := sg.Add("Button", "x48 y376 w330 h30", "Save settings of this account")
+    sg.Add("Text", "x48 y288 w580 h74 c808080", Tr("The profile is a copy of your Dota settings (keys, interface, video, hero grid, builds) from the account you are logged in with. While you play under that account it refreshes itself when Dota closes. When Steam moves to an account that is new to the script, the script offers to transfer the profile into it and switch Steam Cloud off for Dota."))
+    b := sg.Add("Button", "x48 y376 w330 h30", Tr("Save settings of this account"))
     b.OnEvent("Click", (*) => SaveProfileClick())
-    b := sg.Add("Button", "x48 y416 w330 h30", "Transfer the profile to this account (restarts Steam)")
+    b := sg.Add("Button", "x48 y416 w330 h30", Tr("Transfer the profile to this account (restarts Steam)"))
     b.OnEvent("Click", (*) => ApplyProfileClick())
     tab.UseTab()
     FillHeroLV()
     RefreshOrder()
     sg.Show("w680 h600")
+}
+
+; What is selected in the language list: 1 is Auto, then LANGS in order.
+LangChoice() {
+    global LANGS, DOTA_INI
+    i := IndexOf(LANGS, IniRead(DOTA_INI, "options", "lang", "auto"))
+    return i ? i + 1 : 1
+}
+
+; The menus and windows are already built, so after a change the script
+; restarts itself and opens the settings again.
+SetLang(n) {
+    global LANGS, DOTA_INI
+    code := n = 1 ? "auto" : LANGS[n - 1]
+    IniWrite code, DOTA_INI, "options", "lang"
+    IniWrite 1, DOTA_INI, "state", "reopen"
+    Log(Tr("interface language: ") . code)
+    Reload
 }
 
 SetPickDelay(v) {
@@ -1677,7 +1770,7 @@ SetPickDelay(v) {
 FillHeroLV() {
     global sgLV, sgFilter, sgKeys, sgOrder, sgBuilding, HERO_ORDER, HERO_NAME
     f := Norm(sgFilter.Value)
-    attrName := Map("S", "Strength", "A", "Agility", "I", "Intelligence", "U", "Universal")
+    attrName := Map("S", Tr("Strength"), "A", Tr("Agility"), "I", Tr("Intelligence"), "U", Tr("Universal"))
     sgBuilding := true
     sgLV.Delete()
     sgKeys := []
@@ -1751,13 +1844,13 @@ SaveHeroes() {
         names .= (names = "" ? "" : ", ") . HERO_NAME[k]
     IniWrite names, DOTA_INI, "pick", "heroes"
     heroWant := ResolveHeroes()
-    sgInfo.Value := "Saved: " . sgOrder.Length . " heroes"
-    Log("auto-pick hero list: " . (names = "" ? "(empty)" : names))
+    sgInfo.Value := Tr("Saved: ") . sgOrder.Length . Tr(" heroes")
+    Log(Tr("auto-pick hero list: ") . (names = "" ? Tr("(empty)") : names))
 }
 
 Norm(t) {
     t := StrLower(RegExReplace(t, "[^\p{L}\p{N}]"))
-    return StrReplace(t, Chr(0x451), Chr(0x435))
+    return StrReplace(t, Chr(0x451), Chr(0x435))   ; yo -> ye
 }
 
 LoadHeroMap() {
@@ -1805,9 +1898,9 @@ ResolveHeroes() {
             }
             if best != "" && !tie && bestd <= (StrLen(n) >= 8 ? 2 : 1) {
                 want.Push(best)
-                Log("in the heroes list [" . Trim(nm) . "] was read as [" . HERO_NAME[best] . "] (typo)")
+                Log(Tr("in the heroes list [") . Trim(nm) . Tr("] was read as [") . HERO_NAME[best] . Tr("] (typo)"))
             } else
-                Log("unknown name in the heroes list: [" . Trim(nm) . "] (use the English name as in the game)")
+                Log(Tr("unknown name in the heroes list: [") . Trim(nm) . Tr("] (use the English name as in the game)"))
         }
     }
     return want
@@ -2208,7 +2301,7 @@ PickTry(name, cc, chk) {
     global inStage
     lk := LockCenter()
     p0 := HeroPanel()
-    Log("clicking " . name . " at " . cc[1] . "," . cc[2])
+    Log(Tr("clicking ") . name . Tr(" at ") . cc[1] . "," . cc[2])
     PickClick(cc[1], cc[2])
     sel := false
     Loop 8 {
@@ -2222,22 +2315,22 @@ PickTry(name, cc, chk) {
     b1 := LockBtn()
     PickShot("_a_card")
     if !sel {
-        Log("selection did not register: hero panel " . p0 . " -> " . p . ", button " . b1
-            . " (" . name . " unavailable?) - taking the next one")
+        Log(Tr("selection did not register: hero panel ") . p0 . " -> " . p . Tr(", button ") . b1
+            . " (" . name . Tr(" unavailable?) - taking the next one"))
         return 0
     }
-    Log(name . " selected (panel " . p . "), LOCK IN button: " . b1)
+    Log(name . Tr(" selected (panel ") . p . Tr("), LOCK IN button: ") . b1)
     t0 := A_TickCount, shotAt := A_TickCount
     chkAt := 0, lostN := 0, reclickAt := 0, lastCs := ""
     while b1 < 70 {
         if !inStage || A_TickCount - t0 > 90000 {
-            Log("LOCK IN button never lit up before the stage ended (" . b1 . ")")
+            Log(Tr("LOCK IN button never lit up before the stage ended (") . b1 . ")")
             PickShot("_nolock")
             return 3
         }
         if A_TickCount - t0 > 1500 && A_TickCount - shotAt > 6000 {
             shotAt := A_TickCount
-            Log("waiting for LOCK IN to light up (brightness " . b1 . ")")
+            Log(Tr("waiting for LOCK IN to light up (brightness ") . b1 . ")")
             PickShot("_wait")
         }
         Sleep 250
@@ -2258,12 +2351,12 @@ PickTry(name, cc, chk) {
             cs := CandState(chk)
             if cs != lastCs {
                 lastCs := cs
-                Log("card " . name . " while waiting: " . (cs = 1 ? "banned" : cs = 2 ? "gray" : cs = "" ? "not read" : "free")
-                    . ", button " . b1)
+                Log(Tr("card ") . name . Tr(" while waiting: ") . (cs = 1 ? Tr("banned") : cs = 2 ? Tr("gray") : cs = "" ? Tr("not read") : Tr("free"))
+                    . Tr(", button ") . b1)
             }
             if cs = 1 || cs = 2 {
                 if ++lostN >= 2 {
-                    Log(name . ": " . (cs = 1 ? "banned" : "taken by the other team (card is gray)") . " - taking the next one")
+                    Log(name . ": " . (cs = 1 ? Tr("banned") : Tr("taken by the other team (card is gray)")) . Tr(" - taking the next one"))
                     PickShot("_lost")
                     return 0
                 }
@@ -2271,7 +2364,7 @@ PickTry(name, cc, chk) {
                 lostN := 0
                 if cs = 0 && HeroPanel() < 15 && A_TickCount - reclickAt > 3000 {
                     reclickAt := A_TickCount
-                    Log("hero panel disappeared, card " . name . " is free - selecting again")
+                    Log(Tr("hero panel disappeared, card ") . name . Tr(" is free - selecting again"))
                     PickClick(cc[1], cc[2])
                     Sleep 500
                 }
@@ -2279,11 +2372,11 @@ PickTry(name, cc, chk) {
         }
     }
     Loop 3 {
-        Log("LOCK IN button is lit (" . b1 . "); pressing LOCK IN at " . lk[1] . "," . lk[2])
+        Log(Tr("LOCK IN button is lit (") . b1 . Tr("); pressing LOCK IN at ") . lk[1] . "," . lk[2])
         PickClick(lk[1], lk[2])
         Sleep 1200
         b2 := LockBtn()
-        Log("button brightness after LOCK IN: " . b2)
+        Log(Tr("button brightness after LOCK IN: ") . b2)
         if b2 < b1 - 30 {
             PickShot("_b_lock")
             return 1
@@ -2299,40 +2392,40 @@ DoPick() {
         return
     if !optPick {
         picked := true
-        Log("auto-pick is off - not touching anything")
+        Log(Tr("auto-pick is off - not touching anything"))
         return
     }
     if PICK_DEADLINE_MS - (A_TickCount - stageAt) < 3000 {
         picked := true
-        Log("the first round is over (gold penalty next) - too late")
+        Log(Tr("the first round is over (gold penalty next) - too late"))
         return
     }
     ;    ; Someone is at the PC: wait, maybe they will pick themselves; but the penalty will not wait.
     if A_TimeIdlePhysical < 6000 {
         if pickNote != "idle" {
             pickNote := "idle"
-            Log("someone is at the PC (mouse/keyboard " . A_TimeIdlePhysical
-                . " ms ago) - waiting, maybe you will pick yourself")
+            Log(Tr("someone is at the PC (mouse/keyboard ") . A_TimeIdlePhysical
+                . Tr(" ms ago) - waiting, maybe you will pick yourself"))
         }
         SetTimer DoPick, -3000
         return
     }
     try WinGetPos &wx, &wy, &ww, &wh, "ahk_exe dota2.exe"
     catch {
-        Log("Dota window not found")
+        Log(Tr("Dota window not found"))
         picked := true
         return
     }
     if Abs(ww / wh - 16 / 9) > 0.05 {
         picked := true
-        Log("window is not 16:9 (" . ww . "x" . wh . ") - layout not measured, not touching anything")
+        Log(Tr("window is not 16:9 (") . ww . "x" . wh . Tr(") - layout not measured, not touching anything"))
         return
     }
     c1 := CardCenter(1)
     if !Under(c1[1], c1[2]) {
         if pickNote != "covered" {
             pickNote := "covered"
-            Log("Dota is covered by another window - nothing to read, waiting")
+            Log(Tr("Dota is covered by another window - nothing to read, waiting"))
         }
         SetTimer DoPick, -3000
         return
@@ -2341,13 +2434,13 @@ DoPick() {
     if lay = "" {
         if pickNote != "nolayout" {
             pickNote := "nolayout"
-            Log("pick screen not recognised yet - waiting (needs the Attributes or Custom Layout sort)")
+            Log(Tr("pick screen not recognised yet - waiting (needs the Attributes or Custom Layout sort)"))
             PickShot("_unknown")
         }
         SetTimer DoPick, -3000
         return
     }
-    Log("pick screen: " . lay)
+    Log(Tr("pick screen: ") . lay)
     ;    ; Candidates in priority order: [name, card center]. Unavailable ones by color
     ;    ; (banned/gray) are skipped; if the color is wrong, the LOCK IN check in PickTry
     ;    ; will catch it and we go to the next one.
@@ -2356,18 +2449,18 @@ DoPick() {
         want := ResolveHeroes()
         if !want.Length {
             picked := true
-            Log("standard grid, but the hero list is empty - not touching anything")
+            Log(Tr("standard grid, but the hero list is empty - not touching anything"))
             return
         }
         s := wh / 1440
         for key in want {
             st := CellState(key)
             if st = "" {
-                Log(HERO_NAME[key] . ": card not read")
+                Log(HERO_NAME[key] . Tr(": card not read"))
                 continue
             }
-            Log(HERO_NAME[key] . ": " . (st[1] = 1 ? "CROSSED OUT (banned)" : st[1] = 2 ? "GRAY (taken)" : "available")
-                . " (saturation " . st[2] . "%, brightness " . st[3] . ")")
+            Log(HERO_NAME[key] . ": " . (st[1] = 1 ? Tr("CROSSED OUT (banned)") : st[1] = 2 ? Tr("GRAY (taken)") : Tr("available"))
+                . Tr(" (saturation ") . st[2] . Tr("%, brightness ") . st[3] . ")")
             if st[1] = 0 {
                 o := CellOrigin(key)
                 cands.Push([HERO_NAME[key], [wx + Round((o[1] + 27) * s), wy + Round((o[2] + 49) * s)], ["std", key]])
@@ -2376,22 +2469,22 @@ DoPick() {
     } else {
         st := PoolStatus()
         if st = "" {
-            Log("pool not read")
+            Log(Tr("pool not read"))
             SetTimer DoPick, -3000
             return
         }
         txt := ""
         for i, c in st {
-            txt .= " [" . i . (c[1] = 1 ? " CROSSED OUT" : c[1] = 2 ? " GRAY" : " ok")
+            txt .= " [" . i . (c[1] = 1 ? Tr(" CROSSED OUT") : c[1] = 2 ? Tr(" GRAY") : " ok")
                 . " v" . c[2] . " s" . c[3] . "]"
             if c[1] = 0
-                cands.Push(["#" . i . " of the pool", CardCenter(i), ["strip", i]])
+                cands.Push([Tr("#") . i . Tr(" of the pool"), CardCenter(i), ["strip", i]])
         }
-        Log("pool:" . txt)
+        Log(Tr("pool:") . txt)
     }
     if !cands.Length {
         picked := true
-        Log("none of the heroes in the list is available - not picking")
+        Log(Tr("none of the heroes in the list is available - not picking"))
         return
     }
     unsure := ""
@@ -2401,12 +2494,12 @@ DoPick() {
         r := PickTry(c[1], c[2], c[3])
         if r = 1 {
             picked := true
-            Log("hero picked: " . c[1])
+            Log(Tr("hero picked: ") . c[1])
             return
         }
         if r = 3 {
             picked := true
-            Log("picked " . c[1] . " but could not lock it in (the button never lit up)")
+            Log(Tr("picked ") . c[1] . Tr(" but could not lock it in (the button never lit up)"))
             return
         }
         if r = 2 {
@@ -2416,10 +2509,10 @@ DoPick() {
     }
     if unsure != "" {
         picked := true
-        Log("picked " . unsure . " but LOCK IN was not confirmed - check by hand")
+        Log(Tr("picked ") . unsure . Tr(" but LOCK IN was not confirmed - check by hand"))
         return
     }
-    Log("no attempt worked - retrying in 4 s if there is time before the round ends")
+    Log(Tr("no attempt worked - retrying in 4 s if there is time before the round ends"))
     SetTimer DoPick, -4000
 }
 
@@ -2447,12 +2540,12 @@ PoolWatch() {
             if st = ""
                 continue
             key2 .= st[1]
-            txt .= " [" . HERO_NAME[key] . (st[1] = 1 ? " CROSSED OUT" : st[1] = 2 ? " GRAY" : " ok")
+            txt .= " [" . HERO_NAME[key] . (st[1] = 1 ? Tr(" CROSSED OUT") : st[1] = 2 ? Tr(" GRAY") : " ok")
                 . " s" . st[2] . "]"
         }
         if key2 != lastPool {
             lastPool := key2
-            Log("heroes from the list:" . txt)
+            Log(Tr("heroes from the list:") . txt)
         }
         return
     }
@@ -2462,12 +2555,12 @@ PoolWatch() {
     key := "", txt := ""
     for i, c in st {
         key .= c[1]
-        txt .= " [" . i . (c[1] = 1 ? " CROSSED OUT" : c[1] = 2 ? " GRAY" : " ok")
+        txt .= " [" . i . (c[1] = 1 ? Tr(" CROSSED OUT") : c[1] = 2 ? Tr(" GRAY") : " ok")
             . " v" . c[2] . " s" . c[3] . "]"
     }
     if key != lastPool {
         lastPool := key
-        Log("pool changed:" . txt)
+        Log(Tr("pool changed:") . txt)
     }
 }
 
@@ -2490,7 +2583,7 @@ BuildTray() {
     t.Add(M_RUN, (*) => StartupToggle())
     t.Add(M_LOG, (*) => OpenLog())
     t.Add()
-    t.Add("Exit", (*) => ExitApp())
+    t.Add(Tr("Exit"), (*) => ExitApp())
     t.Default := M_SETTINGS
     Status()
 }
@@ -2498,11 +2591,11 @@ BuildTray() {
 Status() {
     global dotaPause, dotaLive, clogOk, optMatch, optInvite, optNtfy, optPick
     global M_MATCH, M_INV, M_PAUSE, M_RUN, M_NTFY, M_PICK, DOTA_LNK, issues
-    s := dotaPause ? "paused"
-       : issues.Count ? "PROBLEM: " . IssueText()
-       : dotaLive != 1 ? "Dota is not running, waiting"
-       : clogOk ? "armed (reading the Dota log)"
-       : "looking for the Dota log"
+    s := dotaPause ? Tr("paused")
+       : issues.Count ? Tr("PROBLEM: ") . IssueText()
+       : dotaLive != 1 ? Tr("Dota is not running, waiting")
+       : clogOk ? Tr("armed (reading the Dota log)")
+       : Tr("looking for the Dota log")
     A_IconTip := SubStr("Dota auto-accept — " . s, 1, 127)
     UpdateIcon()
     try {
@@ -2531,25 +2624,25 @@ SetOpt(which, val) {
     if which = "steamfix" {
         optSteamFix := v
         IniWrite v, DOTA_INI, "steam", "fix"
-        Log("launch options of other Steam accounts: " . (v ? "adding" : "leaving alone"))
+        Log(Tr("launch options of other Steam accounts: ") . (v ? Tr("adding") : Tr("leaving alone")))
         if v
             SetTimer FixSteamAccounts, -300
     } else if which = "ntfy" {
         optNtfy := v
         IniWrite v, DOTA_INI, "options", "ntfy"
-        Log("ntfy notifications: " . (v ? "on" : "off"))
+        Log(Tr("ntfy notifications: ") . (v ? Tr("on") : Tr("off")))
     } else if which = "match" {
         optMatch := v
         IniWrite v, DOTA_INI, "options", "match"
-        Log("auto-accept of matches: " . (v ? "on" : "off"))
+        Log(Tr("auto-accept of matches: ") . (v ? Tr("on") : Tr("off")))
     } else if which = "invite" {
         optInvite := v
         IniWrite v, DOTA_INI, "options", "invite"
-        Log("auto-accept of party invites: " . (v ? "on" : "off"))
+        Log(Tr("auto-accept of party invites: ") . (v ? Tr("on") : Tr("off")))
     } else if which = "pick" {
         optPick := v
         IniWrite v, DOTA_INI, "pick", "enabled"
-        Log("hero auto-pick: " . (v ? "on" : "off"))
+        Log(Tr("hero auto-pick: ") . (v ? Tr("on") : Tr("off")))
     }
     Status()
 }
@@ -2557,10 +2650,10 @@ SetOpt(which, val) {
 TogglePause(*) {
     global dotaPause
     dotaPause := !dotaPause
-    Log(dotaPause ? "PAUSED manually" : "auto again")
+    Log(dotaPause ? Tr("PAUSED manually") : Tr("auto again"))
     Status()
-    Note(dotaPause ? "Dota auto-accept: PAUSED`n(Ctrl+Alt+P to resume)"
-                   : "Dota auto-accept: active")
+    Note(dotaPause ? Tr("Dota auto-accept: PAUSED`n(Ctrl+Alt+P to resume)")
+                   : Tr("Dota auto-accept: active"))
 }
 
 ^!p::TogglePause()
@@ -2588,7 +2681,7 @@ Tick() {
         clogSaid := false
         issues.Clear()
         dotaSince := A_TickCount
-        Log(live ? "Dota started — armed" : "Dota closed — sleeping")
+        Log(live ? Tr("Dota started — armed") : Tr("Dota closed — sleeping"))
         if !live
             SetTimer ProfileAutoSave, -5000
         Status()
@@ -2602,7 +2695,7 @@ Tick() {
     ;    ; stopped if it ever dies silently.
     if A_TickCount - lastBeat > 900000 {
         lastBeat := A_TickCount
-        Log("alive")
+        Log(Tr("alive"))
     }
 
     if !clogOk {
@@ -2613,19 +2706,19 @@ Tick() {
             clogOk := true
             lastGrow := A_TickCount
             DelIssue("nolog")
-            Log("Dota log found, working from it: " . clogPath)
+            Log(Tr("Dota log found, working from it: ") . clogPath)
             Status()
         } else {
             ;            ; The log does not appear right after launch: give Dota 90 seconds.
             if !clogSaid && A_TickCount - dotaSince > 90000 {
                 clogSaid := true
-                Log("Dota's console.log was not found 90 s after launch. "
-                    . "Check -condebug in the launch options (Steam → Dota 2 "
-                    . "→ Properties) and restart it")
+                Log(Tr("Dota's console.log was not found 90 s after launch. ")
+                    . Tr("Check -condebug in the launch options (Steam → Dota 2 ")
+                    . Tr("→ Properties) and restart it"))
                 if !issues.Has("opts") {
-                    AddIssue("nolog", "Dota's console.log not found")
-                    Hint("The script cannot see Dota 2's log. Make sure the launch options "
-                         . "contain -condebug, then restart Dota.")
+                    AddIssue("nolog", Tr("Dota's console.log not found"))
+                    Hint(Tr("The script cannot see Dota 2's log. Make sure the launch options ")
+                         . Tr("contain -condebug, then restart Dota."))
                 }
             }
             return
@@ -2640,11 +2733,11 @@ Tick() {
         lastGrow := A_TickCount
         if issues.Has("silent") {
             DelIssue("silent")
-            Log("Dota log is flowing again")
+            Log(Tr("Dota log is flowing again"))
         }
     } else if A_TickCount - lastGrow > 300000 && !issues.Has("silent") {
-        AddIssue("silent", "Dota log silent for 5+ minutes")
-        Log("Dota log silent for 5+ minutes — the script may be blind")
+        AddIssue("silent", Tr("Dota log silent for 5+ minutes"))
+        Log(Tr("Dota log silent for 5+ minutes — the script may be blind"))
     }
     if _new = "" {
         InvRetry()
@@ -2657,7 +2750,7 @@ Tick() {
         readyAt := A_TickCount
     }
     if InStr(_new, CLOG_START)
-        Log("server assigned — match is starting")
+        Log(Tr("server assigned — match is starting"))
     ;    ; PARTY. Its own event, separate from the ready-check: an invite arrives both
     ;    ; in the menu and in the middle of a match. Every subscription to Invite is a
     ;    ; new invite, even if someone answered the previous one a second ago (a friend
@@ -2674,12 +2767,12 @@ Tick() {
             invDone := false, invTried := 0
             invPending := true, invUntil := A_TickCount + 40000
             invRetryAt := A_TickCount + 1000, invMissLogged := false
-            Log(optInvite ? "PARTY INVITE (log)"
-                : "PARTY INVITE — auto-accept is off, leaving it alone")
+            Log(optInvite ? Tr("PARTY INVITE (log)")
+                : Tr("PARTY INVITE — auto-accept is off, leaving it alone"))
         }
         invAt := A_TickCount
         if !invDone && optInvite
-            TryAccept("party")
+            TryAccept(Tr("party"))
     }
     ;    ; A new lobby is a different match, and the only reliable sign of it.
     _lob := LobbyId(_new)
@@ -2690,7 +2783,7 @@ Tick() {
             readyDone := false, readyTries := 0, lastTry := 0
             readyFail := false
             lobbyAt := A_TickCount, lobbyWatch := true, lobbyNext := 0
-            Log("new lobby " . _lob)
+            Log(Tr("new lobby ") . _lob)
         }
     }
     if InStr(_new, CLOG_READY) {
@@ -2699,15 +2792,15 @@ Tick() {
         if optMatch && !readyDone && readyTries >= CLOG_TRIES
            && A_TickCount - lastTry > RETRY_MS {
             readyTries := 0
-            Log("window is still up — trying candidates again")
+            Log(Tr("window is still up — trying candidates again"))
         }
         if A_TickCount - readyAt > READY_GAP {
             ;            ; A new ready-check only if there was no signal for a long time:
             ;            ; while candidates were being tried, the same match could look new,
             ;            ; and the cursor jumped five more times after the accept.
             readyDone := false, readyTries := 0, readyFail := false
-            Log(optMatch ? "MATCH FOUND (log: ready-check)"
-                : "MATCH FOUND — auto-accept is off, leaving it alone")
+            Log(optMatch ? Tr("MATCH FOUND (log: ready-check)")
+                : Tr("MATCH FOUND — auto-accept is off, leaving it alone"))
         }
         readyAt := A_TickCount
         if !readyDone
@@ -2723,15 +2816,15 @@ StartupToggle(*) {
     global DOTA_LNK
     if FileExist(DOTA_LNK) {
         try FileDelete(DOTA_LNK)
-        Log("removed from startup")
-        Note("No longer starts with Windows", 2500, true)
+        Log(Tr("removed from startup"))
+        Note(Tr("No longer starts with Windows"), 2500, true)
     } else {
         try {
             FileCreateShortcut(A_ScriptFullPath, DOTA_LNK, A_ScriptDir)
-            Log("added to startup")
-            Note("Now starts with Windows", 2500, true)
+            Log(Tr("added to startup"))
+            Note(Tr("Now starts with Windows"), 2500, true)
         } catch as e {
-            Note("could not create the shortcut:`n" . e.Message, 4000, true)
+            Note(Tr("could not create the shortcut:`n") . e.Message, 4000, true)
         }
     }
     Status()
@@ -2740,7 +2833,7 @@ StartupToggle(*) {
 OpenLog(*) {
     global DOTA_LOGF
     if !FileExist(DOTA_LOGF)
-        return Note("the log is empty so far", 2000, true)
+        return Note(Tr("the log is empty so far"), 2000, true)
     try Run(DOTA_LOGF)
 }
 
@@ -2822,10 +2915,10 @@ PartyCands(wx, wy, ww, wh, tries := 8) {
 ; another window, what colors are at the button corners (should be gray ~0x3b4248).
 PartyDiag(wx, wy, ww, wh) {
     global DOTA_WIN, PARTY_BX, PARTY_BY
-    s := "Dota in focus: " . (WinActive(DOTA_WIN) ? "yes" : "no")
-    s .= ", under the button: " . (Under(wx + Round(ww * PARTY_BX),
-                                   wy + Round(wh * PARTY_BY)) ? "Dota" : "another window")
-    s .= ", corners:"
+    s := Tr("Dota in focus: ") . (WinActive(DOTA_WIN) ? Tr("yes") : Tr("no"))
+    s .= Tr(", under the button: ") . (Under(wx + Round(ww * PARTY_BX),
+                                   wy + Round(wh * PARTY_BY)) ? Tr("Dota") : Tr("another window"))
+    s .= Tr(", corners:")
     for d in [[0.385, 0.613], [0.475, 0.613], [0.385, 0.640], [0.475, 0.640]]
         s .= Format(" {:#08x}", Px(wx + Round(ww * d[1]), wy + Round(wh * d[2])))
     return s
@@ -2844,19 +2937,19 @@ InvRetry() {
     if A_TickCount < invRetryAt
         return
     invRetryAt := A_TickCount + 1000
-    TryAccept("party")
+    TryAccept(Tr("party"))
 }
 
 ; what: "match" or "party". The only difference is which log line counts as the
 ; confirmation and which button is searched for.
-TryAccept(what := "match", learnedOnly := false) {
+TryAccept(what := Tr("match"), learnedOnly := false) {
     global CLOG_MINE, CLOG_INVOK, CLOG_WAIT, CLOG_TRIES
     global readyDone, readyTries, invDone, invTried
     global holdTill, CLOG_SILENT, CLOG_HOLD, CLOG_READY, readyAt, lastTry
     global DOTA_WIN, readyFail, invMissLogged
     if A_TickCount < holdTill
         return false            ; just accepted, no need to do it twice
-    _wide := (what = "match")
+    _wide := (what = Tr("match"))
     try
         WinGetPos &_wx, &_wy, &_ww, &_wh, "ahk_exe dota2.exe"
     catch
@@ -2879,19 +2972,19 @@ TryAccept(what := "match", learnedOnly := false) {
     }
     if !cands.Length {
         if _wide {
-            Log(what . ": signal received but the button was not found on screen")
-            DumpColumn(what . " no button")
+            Log(what . Tr(": signal received but the button was not found on screen"))
+            DumpColumn(what . Tr(" no button"))
         } else if !invMissLogged {
             invMissLogged := true
-            Log("party: signal received but the button was not found (" . PartyDiag(_wx, _wy,
-                _ww, _wh) . "); retrying for up to 40 s")
+            Log(Tr("party: signal received but the button was not found (") . PartyDiag(_wx, _wy,
+                _ww, _wh) . Tr("); retrying for up to 40 s"))
         }
         return false
     }
     ;    ; A silent click on the right button once failed while a mouse click worked.
     ;    ; Suspicion: Dota was not in focus; note it in the log.
-    _bg := WinActive(DOTA_WIN) ? "" : ", Dota not in focus"
-    _bg .= ", mouse idle for " . A_TimeIdlePhysical . " ms"
+    _bg := WinActive(DOTA_WIN) ? "" : Tr(", Dota not in focus")
+    _bg .= Tr(", mouse idle for ") . A_TimeIdlePhysical . Tr(" ms")
     for c in cands {
         if (_wide ? readyTries : invTried) >= CLOG_TRIES
             return false
@@ -2900,7 +2993,7 @@ TryAccept(what := "match", learnedOnly := false) {
         else
             invTried++
         ;        ; Silent first, without the mouse. If not confirmed, then a real click.
-        _how := "no mouse"
+        _how := Tr("no mouse")
         ;        ; The party popup appears with an animation: the button pixels are already
         ;        ; gray, but it does not take clicks yet. A mouse click ~1 s later worked,
         ;        ; a fast silent one in the first 100 ms did not. So let it settle, then
@@ -2913,11 +3006,11 @@ TryAccept(what := "match", learnedOnly := false) {
             _ch := ClogNew()
             if InStr(_ch, _ok) {
                 invDone := true
-                Log("party: answered by someone else while waiting — leaving it alone")
+                Log(Tr("party: answered by someone else while waiting — leaving it alone"))
                 return true
             }
             if !PartyGate(_wx, _wy, _ww, _wh) {
-                Log("party: the invite window is gone — leaving it alone")
+                Log(Tr("party: the invite window is gone — leaving it alone"))
                 return false
             }
         }
@@ -2947,26 +3040,26 @@ TryAccept(what := "match", learnedOnly := false) {
                                   c[3] / _ww)
                 } else
                     invDone := true
-                Log(Format("ACCEPTED {5} {7}: click {1},{2} (band {3} px, "
-                           . "color {6:#06x}), Dota confirmed in {4} ms",
+                Log(Format(Tr("ACCEPTED {5} {7}: click {1},{2} (band {3} px, ")
+                           . Tr("color {6:#06x}), Dota confirmed in {4} ms"),
                            c[1], c[2], c[3], A_TickCount - t0, what,
                            c.Has(4) ? c[4] : 0, _how . _bg))
                 if _wide {
                     SetTimer NtfyMatchFail, 0
-                    Ntfy(readyFail ? "Match accepted after all" : "Match found and accepted",
+                    Ntfy(readyFail ? Tr("Match accepted after all") : Tr("Match found and accepted"),
                          "high", "white_check_mark")
                 }
                 return true
             }
             if !_slow && A_TickCount - t0 >= 450 {
                 _slow := true
-                _how := "no mouse (with hover)"
+                _how := Tr("no mouse (with hover)")
                 ClickSilent(c[1], c[2], true)
             }
             ;            ; the silent click did not work: finish with a real click
             if !_hard && A_TickCount - t0 >= (_user ? 450 : CLOG_SILENT - 120) {
                 _hard := true
-                _how := _user ? "with the mouse (the mouse was moving)" : "mouse"
+                _how := _user ? Tr("with the mouse (the mouse was moving)") : Tr("mouse")
                 _lim := CLOG_SILENT + CLOG_WAIT
                 MouseGetPos &ox, &oy
                 Click c[1] . " " . c[2]
@@ -2974,8 +3067,8 @@ TryAccept(what := "match", learnedOnly := false) {
                 MouseMove ox, oy, 0
             }
         }
-        Log(Format("{4}: click {1},{2} (band {3} px, color {5:#06x}) — "
-                   . "no confirmation, trying the next one", c[1], c[2],
+        Log(Format(Tr("{4}: click {1},{2} (band {3} px, color {5:#06x}) — ")
+                   . Tr("no confirmation, trying the next one"), c[1], c[2],
                    c[3], what, c.Has(4) ? c[4] : 0))
     }
     return false
@@ -2994,12 +3087,12 @@ FirstRun() {
         return
     try {
         FileCreateShortcut(A_ScriptFullPath, DOTA_LNK, A_ScriptDir)
-        Log("first run: startup shortcut created")
-        Note("Match auto-accept is on and will start with Windows."
-             . "`nTo turn it off use the tray icon; Ctrl+Alt+P pauses."
-             . "`nThis message will not appear again.", 7000, true)
+        Log(Tr("first run: startup shortcut created"))
+        Note(Tr("Match auto-accept is on and will start with Windows.")
+             . Tr("`nTo turn it off use the tray icon; Ctrl+Alt+P pauses.")
+             . Tr("`nThis message will not appear again."), 7000, true)
     } catch as e {
-        Log("first run: could not create the shortcut — " . e.Message)
+        Log(Tr("first run: could not create the shortcut — ") . e.Message)
     }
 }
 
@@ -3010,9 +3103,13 @@ KnownInit()
 BuildTray()
 EarlyCheck()
 FirstRun()
-Log("script started")
+Log(Tr("script started"))
 SetTimer Tick, 100
 SetTimer FixSteamAccounts, -6000
 SetTimer WatchAccount, 20000
-if A_Args.Length && A_Args[1] = "/settings"
+if LANG_NOTE != ""
+    Log(LANG_NOTE)
+if (A_Args.Length && A_Args[1] = "/settings") || IniRead(DOTA_INI, "state", "reopen", "0") = "1" {
+    IniDelete DOTA_INI, "state", "reopen"
     ShowSettings()
+}

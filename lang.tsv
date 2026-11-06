@@ -1,0 +1,288 @@
+# DotaAccept interface texts. One row per text: Russian <TAB> English <TAB> Ukrainian.
+# The script looks a text up by the column of the language it is written in (SRC_LANG)
+# and shows the column of the chosen language. \n = new line, \t = tab, \\ = backslash,
+# \s = a space at the very start or end of a text (so editors cannot trim it).
+# To add a language: add a column, then add it to LANGS in DotaAccept.ahk.
+Настройки…	Settings…	Налаштування…
+Автопик героя	Auto-pick hero	Автопік героя
+Уведомления на телефон (ntfy)	Phone notifications (ntfy)	Сповіщення на телефон (ntfy)
+Скопировать тему ntfy	Copy ntfy topic	Скопіювати тему ntfy
+Тестовое уведомление	Send test notification	Тестове сповіщення
+Автопринимать матч	Auto-accept matches	Автоприймати матч
+Автопринимать приглашения в пати	Auto-accept party invites	Автоприймати запрошення в паті
+Пауза  (Ctrl+Alt+P)	Pause  (Ctrl+Alt+P)	Пауза  (Ctrl+Alt+P)
+Запускать вместе с Windows	Start with Windows	Запускати разом з Windows
+Открыть лог	Open log	Відкрити лог
+окно принятия вижу, зелёной кнопки не нашёл	accept window seen, green button not found	вікно прийняття бачу, зеленої кнопки не знайшов
+. сетка:	. grid:	. сітка:
+Dota 2 запущена без параметра -condebug, и скрипт не видит матч.\s	Dota 2 was started without the -condebug launch option, so the script cannot see matches.\s	Dota 2 запущена без параметра -condebug, і скрипт не бачить матч.\s
+Steam → Dota 2 → Свойства → Параметры запуска: впиши -condebug\s	In Steam: Dota 2 → Properties → Launch Options: add -condebug\s	Steam → Dota 2 → Властивості → Параметри запуску: впиши -condebug\s
+и перезапусти доту.	and restart Dota.	і перезапусти доту.
+Dota 2 запущена без -condebug, хотя в Steam он вписан: её запустили\s	Dota 2 was started without -condebug although it is set in Steam: it was not started\s	Dota 2 запущена без -condebug, хоча в Steam він вписаний: її запустили\s
+не кнопкой Play (или она перезапустилась сама). Закрой доту и\s	with the Play button (or it restarted itself). Close Dota and\s	не кнопкою Play (або вона перезапустилася сама). Закрий доту й\s
+запусти заново через Steam.	start it again through Steam.	запусти знову через Steam.
+Dota 2 запущена без -condebug, и скрипт не видит матч. В Steam для\s	Dota 2 was started without -condebug, so the script cannot see matches. In Steam, for\s	Dota 2 запущена без -condebug, і скрипт не бачить матч. У Steam для\s
+этого аккаунта параметр не вписан: Dota 2 → Свойства → Параметры\s	this account the option is not set: Dota 2 → Properties → Launch\s	цього акаунта параметр не вписано: Dota 2 → Властивості → Параметри\s
+запуска → -condebug.	Options → -condebug.	запуску → -condebug.
+дота запущена без -condebug	Dota started without -condebug	дота запущена без -condebug
+дота запущена без параметра -condebug: скрипт не увидит матч	Dota was started without -condebug: the script cannot see matches	дота запущена без параметра -condebug: скрипт не побачить матч
+в параметрах запуска Dota 2 в Steam нет -condebug	the Dota 2 launch options in Steam do not contain -condebug	у параметрах запуску Dota 2 у Steam немає -condebug
+Steam: аккаунту …	Steam: account …	Steam: акаунту …
+\sдописано в параметры запуска Dota 2:\s	\s- added to the Dota 2 launch options:\s	\sдописано в параметри запуску Dota 2:\s
+Steam: Steam Cloud для Dota выключен у аккаунта …	Steam: Steam Cloud for Dota switched off for account …	Steam: Steam Cloud для Dota вимкнено в акаунта …
+Steam: не смог поправить параметры запуска у аккаунта …	Steam: could not fix the launch options of account …	Steam: не зміг виправити параметри запуску в акаунта …
+\s(файл не тронут)	\s(file left untouched)	\s(файл не чіпав)
+Не нашёл Steam на этом компьютере.	Could not find Steam on this PC.	Не знайшов Steam на цьому комп'ютері.
+Dota 2 запущена. Закрой её и повтори: Steam нужно закрыть,\s	Dota 2 is running. Close it and try again: Steam has to be closed,\s	Dota 2 запущена. Закрий її й повтори: Steam треба закрити,\s
+а доту он закрыл бы вместе с собой.	and it would close Dota along with itself.	а доту він закрив би разом із собою.
+Steam: закрываю, чтобы вписать параметры запуска	Steam: closing it to write the launch options	Steam: закриваю, щоб вписати параметри запуску
+Steam: не закрылся за 40 с — ничего не менял	Steam: did not close within 40 s - changed nothing	Steam: не закрився за 40 с — нічого не змінював
+Steam не закрылся за 40 секунд, я ничего не менял. Закрой его\s	Steam did not close within 40 seconds, I changed nothing. Close it\s	Steam не закрився за 40 секунд, я нічого не змінював. Закрий його\s
+сам (значок в трее → Выход) и нажми снова.	yourself (tray icon → Exit) and try again.	сам (значок у треї → Вихід) і натисни знову.
+профиль настроек Dota перенесён:\s	Dota settings profile transferred:\s	профіль налаштувань Dota перенесено:\s
+\sфайлов, Steam Cloud\s	\sfiles, Steam Cloud\s	\sфайлів, Steam Cloud\s
+выключено	off	вимкнено
+выключен	off	вимкнено
+выключить не вышло	could not be switched off	вимкнути не вдалося
+Настройки Dota перенесены (	Dota settings transferred (	Налаштування Dota перенесено (
+\sфайлов); то, что лежало на месте,\s	\sfiles); what was there before\s	\sфайлів); те, що лежало на місці,\s
+сохранено в папке bak_profile рядом со скриптом.\s	is saved in the bak_profile folder next to the script.\s	збережено в папці bak_profile поруч зі скриптом.\s
+Настройки перенести не вышло.\s	Could not transfer the settings.\s	Налаштування перенести не вдалося.\s
+Steam Cloud для Dota выключен.\s	Steam Cloud for Dota is switched off.\s	Steam Cloud для Dota вимкнено.\s
+Steam Cloud выключить не вышло — выключи сам: Steam → Dota 2 → Свойства →\s	Could not switch Steam Cloud off - do it yourself: Steam → Dota 2 → Properties →\s	Steam Cloud вимкнути не вдалося — вимкни сам: Steam → Dota 2 → Властивості →\s
+Общие → сними галку «Хранить сохранения игры в Steam Cloud».\s	General → untick 'Keep game saves in the Steam Cloud for Dota 2'.\s	Загальні → зніми галочку «Зберігати збереження гри в Steam Cloud».\s
+Параметры запуска вписаны.	Launch options written.	Параметри запуску вписано.
+Параметры запуска вписать не вышло: впиши\s	Could not write the launch options: add\s	Параметри запуску вписати не вдалося: впиши\s
+-condebug руками (Steam → Dota 2 → Свойства → Параметры запуска).	-condebug by hand (Steam → Dota 2 → Properties → Launch Options).	-condebug руками (Steam → Dota 2 → Властивості → Параметри запуску).
+\sSteam запускается заново.	\sSteam is starting again.	\sSteam запускається знову.
+\n\nSteam запускается заново.	\n\nSteam is starting again.	\n\nSteam запускається знову.
+профиль настроек Dota обновлён:\s	Dota settings profile updated:\s	профіль налаштувань Dota оновлено:\s
+\sфайлов	\sfiles	\sфайлів
+Профиля ещё нет.	No profile yet.	Профілю ще немає.
+Профиль:\s	Profile:\s	Профіль:\s
+\sиз аккаунта …	\sfrom account …	\sз акаунта …
+, сохранён\s	, saved\s	, збережено\s
+Dota 2 запущена, а настройки она записывает при выходе. Закрой её\s	Dota 2 is running, and it writes its settings on exit. Close it\s	Dota 2 запущена, а налаштування вона записує під час виходу. Закрий її\s
+и нажми снова.	and press again.	і натисни знову.
+Сохранил настройки Dota (	Saved the Dota settings (	Зберіг налаштування Dota (
+\sфайлов) из аккаунта …	\sfiles) from account …	\sфайлів) з акаунта …
+. Дальше профиль обновляется сам, когда ты закрываешь Dota под этим\s	. From now on the profile updates itself when you close Dota under this\s	. Далі профіль оновлюється сам, коли ти закриваєш Dota під цим\s
+аккаунтом.	account.	акаунтом.
+Не нашёл файлов настроек у этого аккаунта. Запусти Dota под ним хотя бы\s	Found no settings files for this account. Start Dota under it at least\s	Не знайшов файлів налаштувань цього акаунта. Запусти Dota під ним хоча б\s
+раз и закрой её.	once and close it.	раз і закрий її.
+Профиля ещё нет: сначала войди в свой основной аккаунт и нажми «Сохранить\s	No profile yet: first log in to your main account and press 'Save\s	Профілю ще немає: спершу увійди у свій основний акаунт і натисни «Зберегти\s
+настройки этого аккаунта».	settings of this account'.	налаштування цього акаунта».
+Это аккаунт, из которого взят профиль: переносить некуда.	This is the account the profile was taken from: nothing to transfer to.	Це акаунт, з якого взято профіль: переносити нікуди.
+Мои настройки Dota будут записаны в аккаунт, под которым ты вошёл (то, что\s	My Dota settings will be written into the account you are logged in with (what\s	Мої налаштування Dota буде записано в акаунт, під яким ти ввійшов (те, що\s
+там лежит, сохранится в папке bak_profile). Steam будет закрыт и запущен\s	is there now will be kept in the bak_profile folder). Steam will be closed and started\s	там лежить, збережеться в папці bak_profile). Steam буде закрито й запущено\s
+заново, Steam Cloud для Dota выключится. Продолжить?	again, and Steam Cloud for Dota will be switched off. Continue?	знову, Steam Cloud для Dota вимкнеться. Продовжити?
+В Steam для аккаунта, под которым ты вошёл, в параметрах\s	In Steam, for the account you are logged in with, the\s	У Steam для акаунта, під яким ти ввійшов, у параметрах\s
+запуска Dota 2 нет -condebug, и скрипт не увидит матч.	Dota 2 launch options do not contain -condebug, so the script cannot see matches.	запуску Dota 2 немає -condebug, і скрипт не побачить матч.
+Этот аккаунт скрипту новый. Могу\s	This account is new to the script. I can\s	Цей акаунт для скрипта новий. Можу\s
+перенести в него твои настройки Dota и выключить для Dota Steam Cloud, чтобы\s	transfer your Dota settings into it and switch Steam Cloud off for Dota so that\s	перенести в нього твої налаштування Dota та вимкнути для Dota Steam Cloud, щоб\s
+они не ушли в облако этого аккаунта.	they do not go to the cloud of this account.	вони не пішли в хмару цього акаунта.
+Для этого Steam будет закрыт и сразу запущен заново (около полминуты).\s	For this, Steam will be closed and started again right away (about half a minute).\s	Для цього Steam буде закрито й одразу запущено знову (близько пів хвилини).\s
+Открытые игры лучше закрыть.	Better close any open games.	Відкриті ігри краще закрити.
+Steam сейчас не запущен, поэтому сделаю сразу, перезапуск не нужен.	Steam is not running right now, so I will do it at once, no restart needed.	Steam зараз не запущено, тому зроблю одразу, перезапуск не потрібен.
+Сделать и перезапустить Steam	Do it and restart Steam	Зробити й перезапустити Steam
+Сделать	Do it	Зробити
+Не сейчас	Not now	Не зараз
+Больше не спрашивать	Do not ask again	Більше не питати
+Steam будет закрыт и тут же запущен заново, чтобы вписать -condebug в\s	Steam will be closed and started again right away to write -condebug into\s	Steam буде закрито й одразу запущено знову, щоб вписати -condebug в\s
+аккаунт, под которым ты вошёл. Продолжить?	the account you are logged in with. Continue?	акаунт, під яким ти ввійшов. Продовжити?
+ntfy: создана тема (лежит в dota_accept.ini, секция [ntfy])	ntfy: topic created (stored in dota_accept.ini, section [ntfy])	ntfy: створено тему (лежить у dota_accept.ini, секція [ntfy])
+ntfy: не отправил —\s	ntfy: send failed —\s	ntfy: не надіслав —\s
+ntfy: нет ответа сервера на «	ntfy: no server response for [	ntfy: немає відповіді сервера на «
+ntfy: сервер ответил\s	ntfy: server answered\s	ntfy: сервер відповів\s
+\sна «	\sfor [	\sна «
+ntfy: ошибка отправки «	ntfy: send error for [	ntfy: помилка надсилання «
+ntfy: за\s	ntfy: not accepted within\s	ntfy: за\s
+\sс не принято — тревога	\ss - alert	\sс не прийнято — тривога
+Матч найден, autoaccept не сработал — прими игру!	Match found, auto-accept did not work — accept it yourself!	Матч знайдено, автоприйняття не спрацювало — прийми гру!
+Матч найден, автопринятие выключено — прими игру!	Match found, auto-accept is off — accept it yourself!	Матч знайдено, автоприйняття вимкнено — прийми гру!
+МАТЧ НАЙДЕН (по экрану: лобби есть, а сигнала ready-up в логе нет)	MATCH FOUND (by screen: lobby exists but no ready-up signal in the log)	МАТЧ ЗНАЙДЕНО (за екраном: лобі є, а сигналу ready-up у лозі немає)
+матч	match	матч
+Темы ещё нет	No topic yet	Теми ще немає
+Тема ntfy скопирована в буфер обмена.\nВ приложении ntfy: «+» → вставить.	ntfy topic copied to the clipboard.\nIn the ntfy app: tap + and paste.	Тему ntfy скопійовано в буфер обміну.\nУ застосунку ntfy: «+» → вставити.
+Уведомления выключены	Notifications are off	Сповіщення вимкнено
+Проверка связи: уведомления с компьютера работают	Connection check: notifications from your PC work	Перевірка зв'язку: сповіщення з комп'ютера працюють
+Тестовое уведомление отправлено	Test notification sent	Тестове сповіщення надіслано
+началась стадия выбора героев; выбор через\s	hero selection started; picking in\s	почалася стадія вибору героїв; вибір через\s
+\sс	\ss	\sс
+стадия выбора героев закончилась	hero selection stage ended	стадія вибору героїв закінчилась
+\s(пик не делался)	\s(no pick was made)	\s(пік не робився)
+Dota auto-accept — настройки	Dota auto-accept — settings	Dota auto-accept — налаштування
+Основное	General	Основне
+Автопик героев	Auto-pick	Автопік героїв
+Аккаунты Steam	Steam accounts	Акаунти Steam
+Автоприём	Auto-accept	Автоприйняття
+Автопринимать матч (окно «матч найден»)	Auto-accept matches (the match found window)	Автоприймати матч (вікно «матч знайдено»)
+Присылать: «матч найден и принят» и «не сработало — прими сам»	Send: match found and accepted / auto-accept did not work	Надсилати: «матч знайдено і прийнято» та «не спрацювало — прийми сам»
+Тема — как пароль канала: лежит в dota_accept.ini, в лог не пишется.	The topic works like the channel password: it is stored in dota_accept.ini and never logged.	Тема — як пароль каналу: лежить у dota_accept.ini, у лог не пишеться.
+Включить автопик героя	Enable hero auto-pick	Увімкнути автопік героя
+Выбирать через (сек):	Pick after (sec):	Обирати через (сек):
+Сетка Attributes: отметь героев; порядок в правом списке — приоритет (берётся первый доступный). Полоса MY HEROES (Custom Layout): список не нужен.	Attributes grid: tick the heroes; the order in the right-hand list is the priority (the first available one is taken). MY HEROES strip (Custom Layout): no list needed.	Сітка Attributes: познач героїв; порядок у правому списку — пріоритет (береться перший доступний). Смуга MY HEROES (Custom Layout): список не потрібен.
+Поиск:	Search:	Пошук:
+Герой	Hero	Герой
+Атрибут	Attribute	Атрибут
+Порядок выбора:	Pick order:	Порядок вибору:
+Сохранить список героев	Save hero list	Зберегти список героїв
+Параметры запуска в Steam	Launch options in Steam	Параметри запуску в Steam
+Дописывать параметры запуска (-condebug) другим аккаунтам Steam	Add the launch options (-condebug) to other Steam accounts	Дописувати параметри запуску (-condebug) іншим акаунтам Steam
+У каждого аккаунта Steam свои параметры запуска. Трогаются только аккаунты, под которыми Steam сейчас не работает; рядом с файлом остаётся копия localconfig.vdf.bak_dotaaccept. Список флагов: dota_accept.ini, секция [steam], flags.	Every Steam account has its own launch options. Only accounts Steam is not running under right now are touched; a copy localconfig.vdf.bak_dotaaccept is left next to the file. List of flags: dota_accept.ini, section [steam], flags.	У кожного акаунта Steam свої параметри запуску. Чіпаються лише акаунти, під якими Steam зараз не працює; поруч із файлом лишається копія localconfig.vdf.bak_dotaaccept. Список прапорців: dota_accept.ini, секція [steam], flags.
+Вписать -condebug сейчас (перезапустит Steam)	Add -condebug now (restarts Steam)	Вписати -condebug зараз (перезапустить Steam)
+Мои настройки Dota	My Dota settings	Мої налаштування Dota
+Профиль — копия настроек Dota (клавиши, интерфейс, видео, сетка героев, сборки) из аккаунта, под которым ты вошёл. Пока ты играешь под этим аккаунтом, он обновляется сам при закрытии Dota. Когда Steam перейдёт в новый для скрипта аккаунт, скрипт предложит перенести в него профиль и выключить Steam Cloud для Dota.	The profile is a copy of your Dota settings (keys, interface, video, hero grid, builds) from the account you are logged in with. While you play under that account it refreshes itself when Dota closes. When Steam moves to an account that is new to the script, the script offers to transfer the profile into it and switch Steam Cloud off for Dota.	Профіль — копія налаштувань Dota (клавіші, інтерфейс, відео, сітка героїв, збірки) з акаунта, під яким ти ввійшов. Поки ти граєш під цим акаунтом, він оновлюється сам під час закриття Dota. Коли Steam перейде в акаунт, новий для скрипта, скрипт запропонує перенести в нього профіль і вимкнути Steam Cloud для Dota.
+Сохранить настройки этого аккаунта	Save settings of this account	Зберегти налаштування цього акаунта
+Перенести профиль в этот аккаунт (перезапустит Steam)	Transfer the profile to this account (restarts Steam)	Перенести профіль у цей акаунт (перезапустить Steam)
+Сила	Strength	Сила
+Ловкость	Agility	Спритність
+Интеллект	Intelligence	Інтелект
+Универсал	Universal	Універсал
+Сохранено:\s	Saved:\s	Збережено:\s
+\sгероев	\sheroes	\sгероїв
+список героев автопика:\s	auto-pick hero list:\s	список героїв автопіку:\s
+(пусто)	(empty)	(порожньо)
+в списке heroes «	in the heroes list [	у списку heroes «
+» понято как «	] was read as [	» зрозуміло як «
+» (опечатка)	] (typo)	» (одруківка)
+в списке heroes неизвестное имя: «	unknown name in the heroes list: [	у списку heroes невідоме ім'я: «
+» (нужно английское, как в игре)	] (use the English name as in the game)	» (потрібне англійське, як у грі)
+кликаю\s	clicking\s	клікаю\s
+\sв\s	\sat\s	\sу\s
+выбор не прошёл: панель героя\s	selection did not register: hero panel\s	вибір не пройшов: панель героя\s
+, кнопка\s	, button\s	, кнопка\s
+\sнедоступен?) — беру следующего	\sunavailable?) - taking the next one	\sнедоступний?) — беру наступного
+\sвыбран (панель\s	\sselected (panel\s	\sобрано (панель\s
+), кнопка LOCK IN:\s	), LOCK IN button:\s	), кнопка LOCK IN:\s
+кнопка LOCK IN не засветилась до конца стадии (	LOCK IN button never lit up before the stage ended (	кнопка LOCK IN не засвітилась до кінця стадії (
+жду, пока засветится LOCK IN (яркость\s	waiting for LOCK IN to light up (brightness\s	чекаю, поки засвітиться LOCK IN (яскравість\s
+карточка\s	card\s	картка\s
+\sпри ожидании:\s	\swhile waiting:\s	\sпід час очікування:\s
+в бане	banned	у бані
+серая	gray	сіра
+не прочитана	not read	не прочитана
+свободна	free	вільна
+взяла другая команда (карточка серая)	taken by the other team (card is gray)	взяла інша команда (картка сіра)
+\s— беру следующего	\s- taking the next one	\s— беру наступного
+панель героя пропала, карточка\s	hero panel disappeared, card\s	панель героя зникла, картка\s
+\sсвободна — выбираю снова	\sis free - selecting again	\sвільна — обираю знову
+кнопка LOCK IN светится (	LOCK IN button is lit (	кнопка LOCK IN світиться (
+); нажимаю LOCK IN в\s	); pressing LOCK IN at\s	); натискаю LOCK IN у\s
+яркость кнопки после LOCK IN:\s	button brightness after LOCK IN:\s	яскравість кнопки після LOCK IN:\s
+автопик выключен — не трогаю	auto-pick is off - not touching anything	автопік вимкнено — не чіпаю
+время первого раунда вышло (дальше штраф золота) — не успел	the first round is over (gold penalty next) - too late	час першого раунду вийшов (далі штраф золота) — не встиг
+за компом кто-то есть (мышь/клавиатура\s	someone is at the PC (mouse/keyboard\s	за комп'ютером хтось є (миша/клавіатура\s
+\sмс назад) — подожду, вдруг выберешь сам	\sms ago) - waiting, maybe you will pick yourself	\sмс тому) — зачекаю, раптом обереш сам
+окно доты не найдено	Dota window not found	вікно доти не знайдено
+окно не 16:9 (	window is not 16:9 (	вікно не 16:9 (
+) — раскладка не измерена, не трогаю	) - layout not measured, not touching anything	) — розкладку не виміряно, не чіпаю
+окно доты закрыто другим окном — читать нечего, жду	Dota is covered by another window - nothing to read, waiting	вікно доти закрито іншим вікном — читати нічого, чекаю
+экран пика ещё не распознан — жду (нужна сортировка Attributes или Custom Layout)	pick screen not recognised yet - waiting (needs the Attributes or Custom Layout sort)	екран піку ще не розпізнано — чекаю (потрібне сортування Attributes або Custom Layout)
+экран пика:\s	pick screen:\s	екран піку:\s
+стандартная сетка, но список героев пуст — не трогаю	standard grid, but the hero list is empty - not touching anything	стандартна сітка, але список героїв порожній — не чіпаю
+: карточка не прочитана	: card not read	: картка не прочитана
+ПЕРЕЧЁРКНУТ (бан)	CROSSED OUT (banned)	ПЕРЕКРЕСЛЕНИЙ (бан)
+СЕРЫЙ (взят)	GRAY (taken)	СІРИЙ (взятий)
+доступен	available	доступний
+\s(насыщенность\s	\s(saturation\s	\s(насиченість\s
+%, яркость\s	%, brightness\s	%, яскравість\s
+пул не прочитан	pool not read	пул не прочитано
+\sПЕРЕЧЁРКНУТ	\sCROSSED OUT	\sПЕРЕКРЕСЛЕНИЙ
+\sПЕРЕЧЁРКНУТА	\sCROSSED OUT	\sПЕРЕКРЕСЛЕНА
+\sСЕРЫЙ	\sGRAY	\sСІРИЙ
+\sСЕРАЯ	\sGRAY	\sСІРА
+\sиз пула	\sof the pool	\sз пулу
+пул:	pool:	пул:
+ни один герой из списка не доступен — не выбираю	none of the heroes in the list is available - not picking	жоден герой зі списку не доступний — не обираю
+герой выбран:\s	hero picked:\s	героя обрано:\s
+выбрал\s	picked\s	обрав\s
+, но зафиксировать не вышло (кнопка не засветилась)	\sbut could not lock it in (the button never lit up)	, але зафіксувати не вдалося (кнопка не засвітилась)
+, но LOCK IN не подтвердился — проверь вручную	\sbut LOCK IN was not confirmed - check by hand	, але LOCK IN не підтвердився — перевір вручну
+ни одна попытка не прошла — повторю через 4 с, если успею до конца раунда	no attempt worked - retrying in 4 s if there is time before the round ends	жодна спроба не пройшла — повторю через 4 с, якщо встигну до кінця раунду
+герои из списка:	heroes from the list:	герої зі списку:
+пул изменился:	pool changed:	пул змінився:
+Выход	Exit	Вихід
+пауза	paused	пауза
+ПРОБЛЕМА:\s	PROBLEM:\s	ПРОБЛЕМА:\s
+доты нет, жду запуска	Dota is not running, waiting	доти немає, чекаю запуску
+на взводе (по логу доты)	armed (reading the Dota log)	напоготові (за логом доти)
+ищу лог доты	looking for the Dota log	шукаю лог доти
+параметры запуска у других аккаунтов Steam:\s	launch options of other Steam accounts:\s	параметри запуску в інших акаунтів Steam:\s
+дописываю	adding	дописую
+не трогаю	leaving alone	не чіпаю
+уведомления ntfy:\s	ntfy notifications:\s	сповіщення ntfy:\s
+включено	on	увімкнено
+включены	on	увімкнено
+выключены	off	вимкнено
+автопринятие матча:\s	auto-accept of matches:\s	автоприйняття матчу:\s
+автопринятие приглашений:\s	auto-accept of party invites:\s	автоприйняття запрошень:\s
+автопик героя:\s	hero auto-pick:\s	автопік героя:\s
+включён	on	увімкнено
+ПАУЗА вручную	PAUSED manually	ПАУЗА вручну
+снова авто	auto again	знову авто
+Dota auto-accept: ПАУЗА\n(Ctrl+Alt+P — обратно)	Dota auto-accept: PAUSED\n(Ctrl+Alt+P to resume)	Dota auto-accept: ПАУЗА\n(Ctrl+Alt+P — назад)
+Dota auto-accept: авто	Dota auto-accept: active	Dota auto-accept: авто
+дота запущена — на взводе	Dota started — armed	дота запущена — напоготові
+дота закрыта — сплю	Dota closed — sleeping	дота закрита — сплю
+жив	alive	живий
+лог доты найден, работаю по нему:\s	Dota log found, working from it:\s	лог доти знайдено, працюю за ним:\s
+console.log доты не найден через 90 с после запуска.\s	Dota's console.log was not found 90 s after launch.\s	console.log доти не знайдено через 90 с після запуску.\s
+Проверь -condebug в параметрах запуска (Steam → Dota 2\s	Check -condebug in the launch options (Steam → Dota 2\s	Перевір -condebug у параметрах запуску (Steam → Dota 2\s
+→ Свойства) и перезапусти её	→ Properties) and restart it	→ Властивості) і перезапусти її
+не нашёл console.log доты	Dota's console.log not found	не знайшов console.log доти
+Скрипт не видит лог Dota 2. Проверь, что в параметрах\s	The script cannot see Dota 2's log. Make sure the launch options\s	Скрипт не бачить лог Dota 2. Перевір, що в параметрах\s
+запуска стоит -condebug, и перезапусти доту.	contain -condebug, then restart Dota.	запуску стоїть -condebug, і перезапусти доту.
+лог доты снова идёт	Dota log is flowing again	лог доти знову йде
+лог доты молчит 5+ минут	Dota log silent for 5+ minutes	лог доти мовчить 5+ хвилин
+лог доты молчит 5+ минут — скрипт может быть слепым	Dota log silent for 5+ minutes — the script may be blind	лог доти мовчить 5+ хвилин — скрипт може бути сліпим
+сервер выдан — матч стартует	server assigned — match is starting	сервер видано — матч стартує
+ПРИГЛАШЕНИЕ В ПАТИ (лог)	PARTY INVITE (log)	ЗАПРОШЕННЯ В ПАТІ (лог)
+ПРИГЛАШЕНИЕ В ПАТИ — автопринятие выключено, не трогаю	PARTY INVITE — auto-accept is off, leaving it alone	ЗАПРОШЕННЯ В ПАТІ — автоприйняття вимкнено, не чіпаю
+пати	party	паті
+новое лобби\s	new lobby\s	нове лобі\s
+окно ещё висит — пробую кандидатов заново	window is still up — trying candidates again	вікно ще висить — пробую кандидатів знову
+МАТЧ НАЙДЕН (лог: ready-check)	MATCH FOUND (log: ready-check)	МАТЧ ЗНАЙДЕНО (лог: ready-check)
+МАТЧ НАЙДЕН — автопринятие выключено, не трогаю	MATCH FOUND — auto-accept is off, leaving it alone	МАТЧ ЗНАЙДЕНО — автоприйняття вимкнено, не чіпаю
+убран из автозагрузки	removed from startup	прибрано з автозавантаження
+С Windows больше не запускается	No longer starts with Windows	З Windows більше не запускається
+добавлен в автозагрузку	added to startup	додано в автозавантаження
+Теперь запускается вместе с Windows	Now starts with Windows	Тепер запускається разом з Windows
+не вышло положить ярлык:\n	could not create the shortcut:\n	не вдалося покласти ярлик:\n
+лог пока пустой	the log is empty so far	лог поки порожній
+дота в фокусе:\s	Dota in focus:\s	дота у фокусі:\s
+да	yes	так
+нет	no	ні
+, под кнопкой:\s	, under the button:\s	, під кнопкою:\s
+дота	Dota	дота
+чужое окно	another window	чуже вікно
+, углы:	, corners:	, кути:
+: сигнал есть, а кнопку на экране не нашёл	: signal received but the button was not found on screen	: сигнал є, а кнопку на екрані не знайшов
+\sбез кнопки	\sno button	\sбез кнопки
+пати: сигнал есть, а кнопку не нашёл (	party: signal received but the button was not found (	паті: сигнал є, а кнопку не знайшов (
+); пробую ещё до 40 с	); retrying for up to 40 s	); пробую ще до 40 с
+, дота не в фокусе	, Dota not in focus	, дота не у фокусі
+, мышь простаивала\s	, mouse idle for\s	, миша простоювала\s
+\sмс	\sms	\sмс
+без мыши	no mouse	без миші
+пати: ответили сами, пока ждал — не трогаю	party: answered by someone else while waiting — leaving it alone	паті: відповіли самі, поки чекав — не чіпаю
+пати: окно приглашения исчезло — не трогаю	party: the invite window is gone — leaving it alone	паті: вікно запрошення зникло — не чіпаю
+ПРИНЯЛ {5} {7}: клик {1},{2} (полоса {3} px,\s	ACCEPTED {5} {7}: click {1},{2} (band {3} px,\s	ПРИЙНЯВ {5} {7}: клік {1},{2} (смуга {3} px,\s
+цвет {6:#06x}), дота подтвердила за {4} мс	color {6:#06x}), Dota confirmed in {4} ms	колір {6:#06x}), дота підтвердила за {4} мс
+Матч всё же принят	Match accepted after all	Матч таки прийнято
+Матч найден и принят	Match found and accepted	Матч знайдено і прийнято
+без мыши (с наведением)	no mouse (with hover)	без миші (з наведенням)
+мышью (мышь была в движении)	with the mouse (the mouse was moving)	мишею (миша була в русі)
+мышью	mouse	мишею
+{4}: клик {1},{2} (полоса {3} px, цвет {5:#06x}) —\s	{4}: click {1},{2} (band {3} px, color {5:#06x}) —\s	{4}: клік {1},{2} (смуга {3} px, колір {5:#06x}) —\s
+подтверждения нет, пробую следующего	no confirmation, trying the next one	підтвердження немає, пробую наступного
+первый запуск: положил ярлык в автозагрузку	first run: startup shortcut created	перший запуск: поклав ярлик в автозавантаження
+Автопринятие матча включено и будет включаться с Windows.	Match auto-accept is on and will start with Windows.	Автоприйняття матчу ввімкнено, і воно вмикатиметься разом із Windows.
+\nВыключить — значок в трее, Ctrl+Alt+P пауза.	\nTo turn it off use the tray icon; Ctrl+Alt+P pauses.	\nВимкнути — значок у треї, Ctrl+Alt+P — пауза.
+\nБольше я ничего показывать не буду.	\nThis message will not appear again.	\nБільше я нічого показувати не буду.
+первый запуск: ярлык не положил —\s	first run: could not create the shortcut —\s	перший запуск: ярлик не поклав —\s
+скрипт запущен	script started	скрипт запущено
+»	]	»
+» —\s	] —\s	» —\s
+№	#	№
+язык интерфейса:\s	interface language:\s	мова інтерфейсу:\s

@@ -13,14 +13,14 @@ It works in the background and does not take over your mouse. It does not read o
 
 ## How it works
 
-Dota 2 started with the launch option `-condebug` writes a plain-text `console.log`. The script reads that file and reacts to what the game itself reports (match found, party invite, the hero selection stage starting). To find a button it looks at the pixels of the Dota window, and the click is first **posted straight to the game window without moving your cursor**; only if the game does not confirm it, a real mouse click is made and the cursor goes back. If you are moving the mouse when the match is found, the script clicks for real at once, because a silent click did not go through at such moments. Every action is written to `dota_log.txt` (the interface and the log are in English).
+Dota 2 started with the launch option `-condebug` writes a plain-text `console.log`. The script reads that file and reacts to what the game itself reports (match found, party invite, the hero selection stage starting). To find a button it looks at the pixels of the Dota window, and the click is first **posted straight to the game window without moving your cursor**; only if the game does not confirm it, a real mouse click is made and the cursor goes back. If you are moving the mouse when the match is found, the script clicks for real at once, because a silent click did not go through at such moments. Every action is written to `dota_log.txt` (in the language you chose, see [Language](#language)).
 
 The client language does not matter: the script reads internal message names and recognises screens by icons, and hero names are English in the Russian and Ukrainian clients too.
 
 ## Install
 
 1. Install **[AutoHotkey v2](https://www.autohotkey.com/)** (64-bit Windows).
-2. Download these files into one folder (not Program Files): `DotaAccept.ahk`, `heroes_map.txt`, `myheroes_tpl.txt`.
+2. Download these files into one folder (not Program Files): `DotaAccept.ahk`, `lang.tsv`, `heroes_map.txt`, `myheroes_tpl.txt`.
 3. In Steam: right-click **Dota 2 → Properties → Launch Options** and enter
 
    ```
@@ -40,11 +40,17 @@ The account you are logged in with is held in memory by Steam, so it can only be
 
 Right-click the tray icon → **Settings…** (or double-click it).
 
-- **General:** auto-accept of matches and party invites, phone notifications (copy the topic, send a test), start with Windows, open the log.
+- **General:** auto-accept of matches and party invites, phone notifications (copy the topic, send a test), start with Windows, open the log, interface language.
 - **Auto-pick:** switch on, delay, and the **hero list**: tick heroes, set their order with ▲ ▼. `Ctrl+Alt+P` pauses everything.
 - **Steam accounts:** launch options for other accounts and your Dota settings profile (see [Several Steam accounts](#several-steam-accounts)).
 
 The tray icon is the game's own icon when all is well, and AutoHotkey's built-in "II" when paused or when something is wrong (hover to read why: launch option missing, Dota's log silent for 5+ minutes, …).
+
+## Language
+
+The interface (settings window, tray menu, messages, phone notifications and the log) comes in **English, Russian and Ukrainian**. On the first start the language follows Windows: Russian or Ukrainian Windows gets that language, anything else gets English. To change it, open Settings → General → *Language / Язык / Мова*: the script restarts itself and reopens the settings in the new language. The choice is kept in `dota_accept.ini` (`[options]`, `lang = auto | ru | en | uk`).
+
+All texts live in `lang.tsv` next to the script: one line per text, with the Russian, English and Ukrainian versions separated by tabs. It is a plain text file, so a translation can be fixed (or a language added) without programming; the translations were not checked by native speakers, so corrections are welcome. If `lang.tsv` is missing the script still works, in English.
 
 ## Several Steam accounts
 
@@ -81,7 +87,7 @@ Install the ntfy app, subscribe to your topic (settings → "Copy ntfy topic"). 
 
 ## Files
 
-`DotaAccept.ahk` (the script), `heroes_map.txt` (hero names and grid order, generated from the game), `myheroes_tpl.txt` (template of the "MY HEROES" label), `tools/build_hero_map.py` (regenerates the map). Created at run time next to the script: `dota_accept.ini` (settings, private topic), `dota_log.txt`, `profile/` and `bak_profile/` (your Dota settings profile and replaced files), `snapshots/` (last 12 pick-screen frames for debugging).
+`DotaAccept.ahk` (the script), `lang.tsv` (all interface texts in Russian, English and Ukrainian), `heroes_map.txt` (hero names and grid order, generated from the game), `myheroes_tpl.txt` (template of the "MY HEROES" label), `tools/build_hero_map.py` (regenerates the map). Created at run time next to the script: `dota_accept.ini` (settings, private topic), `dota_log.txt`, `profile/` and `bak_profile/` (your Dota settings profile and replaced files), `snapshots/` (last 12 pick-screen frames for debugging).
 
 ## Disclaimer
 
